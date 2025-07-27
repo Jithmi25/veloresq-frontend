@@ -1,92 +1,111 @@
 import { apiService } from './api';
-import { DiagnosisRequest, DiagnosisResult, ApiResponse } from '../types';
+import { DiagnosisResult } from '../types';
 
 export class DiagnosisService {
   async uploadAudioForDiagnosis(audioFile: File, vehicleInfo?: any, symptoms?: string): Promise<{ diagnosisId: string }> {
-    // TODO: BACKEND INTEGRATION - Replace with actual AI service call
-    /*
-    const formData = new FormData();
-    formData.append('audio', audioFile);
-    
-    if (vehicleInfo) {
-      formData.append('vehicleInfo', JSON.stringify(vehicleInfo));
+    try {
+      const response = await apiService.uploadFile<{ diagnosisId: string }>('/diagnosis/upload', audioFile, {
+        vehicleInfo,
+        symptoms
+      });
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      throw new Error(response.message || 'Failed to upload audio for diagnosis');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to upload audio for diagnosis');
     }
-    
-    if (symptoms) {
-      formData.append('symptoms', symptoms);
-    }
-
-    const response = await apiService.getAiApiInstance().post('/diagnose', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    
-    return response.data;
-    */
-    
-    console.log('Upload audio for diagnosis - Backend integration needed:', audioFile.name, vehicleInfo, symptoms);
-    
-    // HARDCODED DATA FOR TESTING
-    return {
-      diagnosisId: 'mock-diagnosis-' + Date.now()
-    };
   }
 
   async getDiagnosisResult(diagnosisId: string): Promise<DiagnosisResult> {
-    // TODO: BACKEND INTEGRATION - Replace with actual AI service call
-    // const response = await apiService.getAiApiInstance().get(`/diagnosis/${diagnosisId}`);
-    console.log('Get diagnosis result - Backend integration needed:', diagnosisId);
-    
-    // HARDCODED DATA FOR TESTING
-    return {
-      id: diagnosisId,
-      confidence: 87,
-      issue: 'Engine Belt Issues',
-      severity: 'medium',
-      description: 'Based on the audio analysis, your vehicle likely has a worn or loose serpentine belt. This is causing the squealing sound you recorded.',
-      recommendations: [
-        'Inspect serpentine belt for cracks or fraying',
-        'Check belt tension and alignment',
-        'Replace belt if necessary',
-        'Inspect belt pulleys for wear'
-      ],
-      estimatedCost: { min: 3500, max: 8500 },
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const response = await apiService.get<{ diagnosis: DiagnosisResult }>(`/diagnosis/${diagnosisId}/result`);
+      
+      if (response.success && response.data) {
+        return response.data.diagnosis;
+      }
+      
+      throw new Error(response.message || 'Failed to get diagnosis result');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to get diagnosis result');
+    }
   }
 
-  async getUserDiagnoses(page = 1, limit = 10): Promise<{ diagnoses: DiagnosisResult[]; total: number }> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Get user diagnoses - Backend integration needed');
-    
-    // HARDCODED DATA FOR TESTING
-    return {
-      diagnoses: [],
-      total: 0
-    };
+  async getUserDiagnoses(page = 1, limit = 10): Promise<{ diagnoses: DiagnosisResult[]; pagination: any }> {
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
+      const response = await apiService.get<{ diagnoses: DiagnosisResult[]; pagination: any }>(`/diagnosis?${params}`);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      throw new Error(response.message || 'Failed to get user diagnoses');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to get user diagnoses');
+    }
   }
 
-  async saveDiagnosisResult(diagnosisData: Partial<DiagnosisResult>): Promise<DiagnosisResult> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Save diagnosis result - Backend integration needed:', diagnosisData);
-    throw new Error('Backend integration needed for diagnosis saving');
+  async addDiagnosisFeedback(id: string, wasAccurate: boolean, rating?: number, comments?: string): Promise<DiagnosisResult> {
+    try {
+      const response = await apiService.put<{ diagnosis: DiagnosisResult }>(`/diagnosis/${id}/feedback`, {
+        wasAccurate,
+        rating,
+        comments
+      });
+      
+      if (response.success && response.data) {
+        return response.data.diagnosis;
+      }
+      
+      throw new Error(response.message || 'Failed to add feedback');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to add feedback');
+    }
   }
 
   async deleteDiagnosis(id: string): Promise<void> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Delete diagnosis - Backend integration needed:', id);
-    throw new Error('Backend integration needed for diagnosis deletion');
+    try {
+      const response = await apiService.delete(`/diagnosis/${id}`);
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to delete diagnosis');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to delete diagnosis');
+    }
   }
 
   // Check AI service health
   async checkAiServiceHealth(): Promise<boolean> {
-    // TODO: BACKEND INTEGRATION - Replace with actual AI service health check
-    // const response = await apiService.getAiApiInstance().get('/health');
-    console.log('Check AI service health - Backend integration needed');
-    
-    // HARDCODED DATA FOR TESTING
-    return true;
+    try {
+      const response = await apiService.get('/diagnosis/health');
+      return response.success;
+    } catch (error) {
+      console.error('AI service health check failed:', error);
+      return false;
+    }
   }
 }
 

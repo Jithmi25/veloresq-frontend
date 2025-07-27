@@ -2,12 +2,19 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Car, Mail, Lock, Eye, EyeOff, AlertCircle, User, Shield, Wrench } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { toast } from 'react-toastify';
+
+interface LoginFormData {
+  email: string;
+  password: string;
+  role: 'customer' | 'garage_owner' | 'admin';
+}
 
 const LoginPage: React.FC = () => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
-    role: 'customer' as 'customer' | 'garage_owner' | 'admin',
+    role: 'customer',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +24,7 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Get the previous location or default to home
   const from = location.state?.from?.pathname || '/';
 
   const roleOptions = [
@@ -55,28 +63,47 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
+      // Call the login function from the auth context with proper parameters
       await login(formData.email, formData.password, formData.role);
-      
+
+      // Show success message
+      toast.success(`Welcome back!`);
+
       // Redirect based on role
       let redirectPath = from;
       if (formData.role === 'admin') {
         redirectPath = '/admin';
       } else if (formData.role === 'garage_owner') {
         redirectPath = '/garage-dashboard';
+      } else if (from === '/') {
+        // If coming from home, redirect to appropriate dashboard
+        redirectPath = '/dashboard';
       }
-      
+
+      // Navigate to the appropriate page
       navigate(redirectPath, { replace: true });
+
     } catch (error: any) {
-      setError(error.message || 'Login failed. Please check your credentials and selected role.');
+      console.error('Login error:', error);
+      
+      // Handle different types of errors
+      let errorMessage = 'Login failed. Please try again.';
+      if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
   };
 
@@ -126,7 +153,7 @@ const LoginPage: React.FC = () => {
                       name="role"
                       value={role.value}
                       checked={formData.role === role.value}
-                      onChange={(e) => handleRoleChange(e.target.value as any)}
+                      onChange={() => handleRoleChange(role.value as any)}
                       className="sr-only"
                     />
                     <div className="flex items-center space-x-3">
@@ -153,6 +180,7 @@ const LoginPage: React.FC = () => {
                   id="email"
                   name="email"
                   type="email"
+                  autoComplete="email"
                   required
                   value={formData.email}
                   onChange={handleChange}
@@ -172,6 +200,7 @@ const LoginPage: React.FC = () => {
                   id="password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   required
                   value={formData.password}
                   onChange={handleChange}
@@ -182,6 +211,7 @@ const LoginPage: React.FC = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -202,7 +232,10 @@ const LoginPage: React.FC = () => {
               </div>
 
               <div className="text-sm">
-                <Link to="/forgot-password" className="text-primary hover:text-primary-dark">
+                <Link 
+                  to="/forgot-password" 
+                  className="text-primary hover:text-primary-dark font-medium"
+                >
                   Forgot your password?
                 </Link>
               </div>
@@ -211,7 +244,9 @@ const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-primary text-secondary py-3 px-4 rounded-lg font-semibold hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
+              className={`w-full bg-primary text-secondary py-3 px-4 rounded-lg font-semibold hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200 ${
+                isLoading ? 'opacity-50 cursor-not-allowed' : 'transform hover:scale-105'
+              }`}
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
@@ -227,7 +262,10 @@ const LoginPage: React.FC = () => {
           <div className="mt-6 text-center">
             <p className="text-gray-600">
               Don't have an account?{' '}
-              <Link to="/register" className="text-primary hover:text-primary-dark font-semibold">
+              <Link 
+                to="/register" 
+                className="text-primary hover:text-primary-dark font-semibold"
+              >
                 Sign up here
               </Link>
             </p>

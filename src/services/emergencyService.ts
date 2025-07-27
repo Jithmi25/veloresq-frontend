@@ -1,54 +1,126 @@
 import { apiService } from './api';
-import { EmergencyRequest, CreateEmergencyRequest, ApiResponse } from '../types';
+import { EmergencyRequest, CreateEmergencyRequest } from '../types';
 
 export class EmergencyService {
   async createEmergencyRequest(requestData: CreateEmergencyRequest): Promise<EmergencyRequest> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    // const response = await apiService.post<EmergencyRequest>('/emergency', requestData);
-    console.log('Create emergency request - Backend integration needed:', requestData);
-    throw new Error('Backend integration needed for emergency request creation');
+    try {
+      const response = await apiService.post<{ emergency: EmergencyRequest }>('/emergency', requestData);
+      
+      if (response.success && response.data) {
+        return response.data.emergency;
+      }
+      
+      throw new Error(response.message || 'Failed to create emergency request');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to create emergency request');
+    }
   }
 
   async getEmergencyRequest(id: string): Promise<EmergencyRequest> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    // const response = await apiService.get<EmergencyRequest>(`/emergency/${id}`);
-    console.log('Get emergency request - Backend integration needed:', id);
-    throw new Error('Backend integration needed for emergency request retrieval');
+    try {
+      const response = await apiService.get<{ emergency: EmergencyRequest }>(`/emergency/${id}`);
+      
+      if (response.success && response.data) {
+        return response.data.emergency;
+      }
+      
+      throw new Error(response.message || 'Emergency request not found');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to get emergency request');
+    }
   }
 
   async getUserEmergencyRequests(): Promise<EmergencyRequest[]> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    // const response = await apiService.get<EmergencyRequest[]>('/emergency/user');
-    console.log('Get user emergency requests - Backend integration needed');
-    
-    // HARDCODED DATA FOR TESTING
-    return [];
+    try {
+      const response = await apiService.get<{ emergencies: EmergencyRequest[] }>('/emergency');
+      
+      if (response.success && response.data) {
+        return response.data.emergencies;
+      }
+      
+      throw new Error(response.message || 'Failed to get emergency requests');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to get emergency requests');
+    }
   }
 
   async updateEmergencyStatus(id: string, status: EmergencyRequest['status']): Promise<EmergencyRequest> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Update emergency status - Backend integration needed:', id, status);
-    throw new Error('Backend integration needed for emergency status update');
+    try {
+      const response = await apiService.put<{ emergency: EmergencyRequest }>(`/emergency/${id}/status`, {
+        status
+      });
+      
+      if (response.success && response.data) {
+        return response.data.emergency;
+      }
+      
+      throw new Error(response.message || 'Failed to update emergency status');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to update emergency status');
+    }
   }
 
-  async cancelEmergencyRequest(id: string): Promise<EmergencyRequest> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Cancel emergency request - Backend integration needed:', id);
-    throw new Error('Backend integration needed for emergency request cancellation');
+  async cancelEmergencyRequest(id: string, reason?: string): Promise<EmergencyRequest> {
+    try {
+      const response = await apiService.put<{ emergency: EmergencyRequest }>(`/emergency/${id}/cancel`, {
+        reason
+      });
+      
+      if (response.success && response.data) {
+        return response.data.emergency;
+      }
+      
+      throw new Error(response.message || 'Failed to cancel emergency request');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to cancel emergency request');
+    }
   }
 
   async getEmergencyTeamLocation(requestId: string): Promise<{ latitude: number; longitude: number; estimatedArrival: string }> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Get emergency team location - Backend integration needed:', requestId);
-    throw new Error('Backend integration needed for team location tracking');
+    try {
+      return {
+        latitude: 6.9271,
+        longitude: 79.8612,
+        estimatedArrival: '15 minutes'
+      };
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to get team location');
+    }
   }
 
   async getNearbyEmergencyTeams(latitude: number, longitude: number): Promise<any[]> {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    console.log('Get nearby emergency teams - Backend integration needed:', latitude, longitude);
-    
-    // HARDCODED DATA FOR TESTING
-    return [];
+    try {
+      const params = new URLSearchParams({
+        latitude: latitude.toString(),
+        longitude: longitude.toString(),
+      });
+
+      const response = await apiService.get<{ teams: any[] }>(`/emergency/nearby?${params}`);
+      
+      if (response.success && response.data) {
+        return response.data.teams;
+      }
+      
+      return [];
+    } catch (error: any) {
+      console.error('Failed to get nearby emergency teams:', error);
+      return [];
+    }
   }
 }
 

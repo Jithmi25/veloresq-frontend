@@ -1,285 +1,262 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, MapPin, Clock, AlertTriangle, CheckCircle, Car, Wrench, Zap } from 'lucide-react';
+import { emergencyService } from '../services/emergencyService';
+import { EmergencyRequest, CreateEmergencyRequest } from '../types';
+
+type EmergencyStatus = 'idle' | 'requesting' | 'dispatched' | 'arrived';
 
 const EmergencyPage: React.FC = () => {
-  const [emergencyStatus, setEmergencyStatus] = useState<'idle' | 'requesting' | 'dispatched' | 'arrived'>('idle');
-  const [location, setLocation] = useState<string>('');
-  const [emergencyType, setEmergencyType] = useState<string>('');
+  const [emergencyStatus, setEmergencyStatus] = useState<EmergencyStatus>('idle');
+  const [location, setLocation] = useState('');
+  const [emergencyType, setEmergencyType] = useState<EmergencyRequest['type'] | ''>('');
+  const [description, setDescription] = useState('');
+  const [requestId, setRequestId] = useState<string | null>(null);
   const [estimatedTime, setEstimatedTime] = useState<number>(0);
   const [countdown, setCountdown] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const emergencyTypes = [
-    { id: 'breakdown', label: 'Vehicle Breakdown', icon: Car, description: 'Engine won\'t start, overheating, etc.' },
-    { id: 'accident', label: 'Accident Support', icon: AlertTriangle, description: 'Minor accident, need towing' },
-    { id: 'flat-tire', label: 'Flat Tire', icon: Wrench, description: 'Tire puncture or replacement' },
-    { id: 'battery', label: 'Battery Issues', icon: Zap, description: 'Jump start, battery replacement' },
-    { id: 'fuel', label: 'Out of Fuel', icon: Car, description: 'Emergency fuel delivery' },
-    { id: 'lockout', label: 'Vehicle Lockout', icon: Car, description: 'Keys locked inside vehicle' },
+    { id: 'breakdown', label: 'Vehicle Breakdown', icon: Car },
+    { id: 'accident', label: 'Accident Support', icon: AlertTriangle },
+    { id: 'flat-tire', label: 'Flat Tire', icon: Wrench },
+    { id: 'battery', label: 'Battery Issues', icon: Zap },
+    { id: 'fuel', label: 'Out of Fuel', icon: Car },
+    { id: 'lockout', label: 'Vehicle Lockout', icon: Car },
   ];
 
   useEffect(() => {
-    if (countdown > 0) {
+    if (countdown > 0 && emergencyStatus === 'dispatched') {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
       return () => clearTimeout(timer);
     }
-  }, [countdown]);
+  }, [countdown, emergencyStatus]);
 
-  const handleEmergencyRequest = () => {
-    if (!emergencyType || !location) return;
+  useEffect(() => {
+    let poll: number;
+    if (requestId && emergencyStatus === 'dispatched') {
+      poll = setInterval(async () => {
+        try {
+          const emergencyRequest = await emergencyService.getEmergencyRequest(requestId);
+          if (emergencyRequest.status === 'completed') {
+            setEmergencyStatus('arrived');
+            clearInterval(poll);
+          }
+        } catch (err) {
+          console.error('Failed to poll emergency status:', err);
+        }
+      }, 5000);
+    }
+    return () => clearInterval(poll);
+  }, [requestId, emergencyStatus]);
+
+  // Get user's current location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        }
+      );
+    }
+  }, []);
+
+  const handleEmergencyRequest = async () => {
+    if (!emergencyType || !location || !currentLocation) {
+      setError('Please select emergency type and provide location');
+      return;
+    }
     
+    setError(null);
     setEmergencyStatus('requesting');
     
-    // Simulate emergency request process
-    setTimeout(() => {
+    try {
+      const requestData: CreateEmergencyRequest = {
+        type: emergencyType as EmergencyRequest['type'],
+        description: description || `${emergencyType} emergency`,
+        location: {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          address: location
+        }
+      };
+
+      const emergencyRequest = await emergencyService.createEmergencyRequest(requestData);
+      setRequestId(emergencyRequest.id);
+      
+      // Simulate estimated time (in real app, this would come from the API)
+      const etaMinutes = 15;
+      setEstimatedTime(etaMinutes);
+      setCountdown(etaMinutes * 60);
       setEmergencyStatus('dispatched');
-      setEstimatedTime(25);
-      setCountdown(25 * 60); // 25 minutes in seconds
-    }, 3000);
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getStatusColor = () => {
-    switch (emergencyStatus) {
-      case 'requesting': return 'text-yellow-600';
-      case 'dispatched': return 'text-blue-600';
-      case 'arrived': return 'text-green-600';
-      default: return 'text-gray-600';
+    } catch (err: any) {
+      console.error('Emergency request failed:', err);
+      setError(err.message || 'Failed to send emergency request');
+      setEmergencyStatus('idle');
     }
   };
 
-  const getStatusMessage = () => {
-    switch (emergencyStatus) {
-      case 'requesting': return 'Finding nearest emergency service...';
-      case 'dispatched': return 'Emergency team is on the way!';
-      case 'arrived': return 'Emergency team has arrived!';
-      default: return 'Ready to help in case of emergency';
-    }
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
+
+  const statusColor = emergencyStatus === 'requesting'
+    ? 'text-yellow-600'
+    : emergencyStatus === 'dispatched'
+      ? 'text-blue-600'
+      : emergencyStatus === 'arrived'
+        ? 'text-green-600'
+        : 'text-gray-600';
+
+  const statusMessage = emergencyStatus === 'requesting'
+    ? 'Finding nearest emergency service...'
+    : emergencyStatus === 'dispatched'
+      ? 'Emergency team is on the way!'
+      : emergencyStatus === 'arrived'
+        ? 'Emergency team has arrived!'
+        : 'Ready to help in case of emergency';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
+          <div className="flex justify-center mb-4">
             <div className="bg-red-500 p-4 rounded-full animate-pulse">
               <AlertTriangle className="h-8 w-8 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-secondary mb-2">Emergency Service</h1>
+          <h1 className="text-3xl font-bold text-secondary mb-2">Emergency Service</h1>
           <p className="text-xl text-gray-600">24/7 roadside assistance at your fingertips</p>
         </div>
 
+        {error && <div className="mb-4 text-red-600 font-semibold">Error: {error}</div>}
+
         {emergencyStatus === 'idle' && (
-          <div className="bg-white rounded-xl shadow-lg p-8 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-lg p-8">
             <h2 className="text-2xl font-bold text-secondary mb-6">What's your emergency?</h2>
-            
-            {/* Emergency Type Selection */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {emergencyTypes.map((type) => (
-                <label
-                  key={type.id}
-                  className={`block p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                    emergencyType === type.id
-                      ? 'border-red-500 bg-red-50'
-                      : 'border-gray-200 hover:border-red-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="emergencyType"
+              {emergencyTypes.map(type => (
+                <label key={type.id}
+                  className={`block p-4 border-2 rounded-lg cursor-pointer ${
+                    emergencyType === type.id ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                  }`}>
+                  <input type="radio" name="emergencyType"
                     value={type.id}
                     checked={emergencyType === type.id}
-                    onChange={(e) => setEmergencyType(e.target.value)}
-                    className="sr-only"
-                  />
-                  <div className="flex items-start space-x-3">
+                    onChange={e => setEmergencyType(e.target.value as EmergencyRequest['type'])}
+                    className="sr-only" />
+                  <div className="flex items-center space-x-3">
                     <div className="p-2 bg-red-100 rounded-lg">
                       <type.icon className="h-6 w-6 text-red-600" />
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-secondary">{type.label}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{type.description}</p>
-                    </div>
+                    <span>{type.label}</span>
                   </div>
                 </label>
               ))}
             </div>
-
-            {/* Location Input */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-secondary mb-2">
-                <MapPin className="inline h-4 w-4 mr-2" />
-                Your Current Location
-              </label>
+              <label className="block mb-2"><MapPin className="inline h-4 w-4 mr-2" />Your Current Location</label>
               <div className="flex space-x-3">
-                <input
-                  type="text"
-                  placeholder="Enter your location or use GPS..."
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-                <button className="bg-gray-200 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-300 transition-colors duration-200 flex items-center">
+                <input type="text" placeholder="Enter your location address"
+                  value={location} onChange={e => setLocation(e.target.value)}
+                  className="flex-1 p-3 border rounded-lg" />
+                <button
+                  type="button"
+                  title="Get current location"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          setCurrentLocation({
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                          });
+                          setLocation(`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`);
+                        },
+                        (error) => {
+                          setError('Unable to get your location. Please enter manually.');
+                        }
+                      );
+                    }
+                  }}
+                  className="bg-gray-200 px-3 rounded-lg hover:bg-gray-300">
                   <MapPin className="h-5 w-5" />
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mt-2">
-                We'll use your location to dispatch the nearest emergency team
-              </p>
+              {currentLocation && (
+                <p className="text-sm text-gray-500 mt-1">
+                  GPS: {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+                </p>
+              )}
             </div>
-
-            {/* Emergency Button */}
-            <button
-              onClick={handleEmergencyRequest}
-              disabled={!emergencyType || !location}
-              className="w-full bg-red-500 text-white py-4 rounded-xl font-bold text-xl hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 animate-pulse"
-            >
+            
+            <div className="mb-6">
+              <label className="block mb-2">Additional Details (Optional)</label>
+              <textarea
+                placeholder="Describe your emergency situation..."
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="w-full p-3 border rounded-lg h-20 resize-none"
+              />
+            </div>
+            <button onClick={handleEmergencyRequest}
+              disabled={!emergencyType || !location || !currentLocation}
+              className="w-full bg-red-500 text-white py-4 rounded-xl font-bold hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed">
               🚨 REQUEST EMERGENCY HELP
             </button>
-
-            {/* Important Info */}
-            <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-start space-x-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-yellow-800">Important Information</h4>
-                  <ul className="text-sm text-yellow-700 mt-2 space-y-1">
-                    <li>• For life-threatening emergencies, call 119 immediately</li>
-                    <li>• Our service is for vehicle-related emergencies only</li>
-                    <li>• Stay with your vehicle and keep your phone charged</li>
-                    <li>• Turn on hazard lights if safe to do so</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+            {(!currentLocation) && (
+              <p className="text-sm text-gray-500 mt-2 text-center">
+                Please allow location access or enter your address manually
+              </p>
+            )}
           </div>
         )}
 
         {emergencyStatus === 'requesting' && (
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center animate-fade-in">
-            <div className="animate-spin mx-auto mb-6 w-16 h-16 border-4 border-yellow-200 border-t-yellow-600 rounded-full"></div>
+          <div className="bg-white p-8 text-center rounded-xl shadow-lg">
+            <div className="animate-spin mx-auto mb-6 w-16 h-16 border-4 border-yellow-200 border-t-yellow-600 rounded-full" />
             <h2 className="text-2xl font-bold text-secondary mb-4">Processing Emergency Request</h2>
-            <p className="text-gray-600 mb-6">
-              We're finding the nearest available emergency team for your location...
-            </p>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-600">
-                <strong>Emergency Type:</strong> {emergencyTypes.find(t => t.id === emergencyType)?.label}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                <strong>Location:</strong> {location}
-              </p>
-            </div>
+            <p className="text-gray-600 mb-6">{statusMessage}</p>
           </div>
         )}
 
         {(emergencyStatus === 'dispatched' || emergencyStatus === 'arrived') && (
           <div className="space-y-6">
-            {/* Status Card */}
-            <div className="bg-white rounded-xl shadow-lg p-8 text-center animate-fade-in">
+            <div className="bg-white p-8 text-center rounded-xl shadow-lg">
               <div className={`mx-auto mb-6 w-16 h-16 rounded-full flex items-center justify-center ${
                 emergencyStatus === 'arrived' ? 'bg-green-100' : 'bg-blue-100'
               }`}>
-                {emergencyStatus === 'arrived' ? (
-                  <CheckCircle className="h-8 w-8 text-green-600" />
-                ) : (
-                  <Car className="h-8 w-8 text-blue-600" />
-                )}
+                {emergencyStatus === 'arrived' ? <CheckCircle className="h-8 w-8 text-green-600" />
+                  : <Car className="h-8 w-8 text-blue-600" />}
               </div>
-              <h2 className={`text-2xl font-bold mb-2 ${getStatusColor()}`}>
-                {getStatusMessage()}
-              </h2>
+              <h2 className={`text-2xl font-bold mb-2 ${statusColor}`}>{statusMessage}</h2>
               {emergencyStatus === 'dispatched' && (
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-secondary mb-2">
-                    {formatTime(countdown)}
-                  </div>
+                <div>
+                  <div className="text-4xl font-bold text-secondary mb-2">{formatTime(countdown)}</div>
                   <p className="text-gray-600">Estimated arrival time</p>
                 </div>
               )}
             </div>
-
-            {/* Emergency Team Details */}
-            <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-              <h3 className="text-xl font-bold text-secondary mb-4">Emergency Team Details</h3>
-              <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
-                  <span className="font-bold text-secondary">RT</span>
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-secondary">Rescue Team Alpha</h4>
-                  <p className="text-sm text-gray-600">Professional Emergency Response</p>
-                  <div className="flex items-center mt-1">
-                    <span className="text-yellow-500">★★★★★</span>
-                    <span className="text-sm text-gray-600 ml-2">4.9 (247 reviews)</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <button className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center">
-                    <Phone className="h-4 w-4 mr-2" />
-                    Call
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Tracking */}
-            <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-              <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
-                <MapPin className="h-5 w-5 mr-2" />
-                Live Tracking
-              </h3>
-              <div className="bg-gray-100 h-48 rounded-lg flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <MapPin className="h-12 w-12 mx-auto mb-2" />
-                  <p>Live map view would appear here</p>
-                  <p className="text-sm">Showing real-time location of emergency team</p>
-                </div>
-              </div>
-              <div className="mt-4 flex justify-between text-sm text-gray-600">
-                <span>Current Location: {location}</span>
-                <span>Team Location: 2.3km away</span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex space-x-4">
-              <button className="flex-1 bg-secondary text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-dark transition-colors duration-200 flex items-center justify-center">
-                <Phone className="h-5 w-5 mr-2" />
-                Call Emergency Team
-              </button>
-              <button 
-                onClick={() => setEmergencyStatus('idle')}
-                className="border border-red-500 text-red-500 px-6 py-3 rounded-lg font-semibold hover:bg-red-50 transition-colors duration-200"
-              >
-                Cancel Request
-              </button>
-            </div>
+            {/* Additional UI such as team details, map, buttons can go here */}
           </div>
         )}
 
         {/* Emergency Contacts */}
-        <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
+        <div className="mt-8 bg-white p-6 rounded-xl shadow-lg">
           <h3 className="text-xl font-bold text-secondary mb-4">Emergency Contacts</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-red-50 rounded-lg">
-              <h4 className="font-semibold text-red-800">Police Emergency</h4>
-              <p className="text-2xl font-bold text-red-600">119</p>
-            </div>
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-semibold text-blue-800">Medical Emergency</h4>
-              <p className="text-2xl font-bold text-blue-600">1990</p>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <h4 className="font-semibold text-green-800">Veloresq Hotline</h4>
-              <p className="text-2xl font-bold text-green-600">*123#</p>
-            </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="p-4 bg-red-50 text-center"><span className="font-semibold">Police Emergency</span><div className="text-2xl">119</div></div>
+            <div className="p-4 bg-blue-50 text-center"><span className="font-semibold">Medical Emergency</span><div className="text-2xl">1990</div></div>
+            <div className="p-4 bg-green-50 text-center"><span className="font-semibold">Veloresq Hotline</span><div className="text-2xl">*123#</div></div>
           </div>
         </div>
       </div>

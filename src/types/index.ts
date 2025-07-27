@@ -26,6 +26,7 @@ export interface User {
 export interface LoginRequest {
   email: string;
   password: string;
+  role?: 'customer' | 'garage_owner' | 'admin';
 }
 
 export interface RegisterRequest {
@@ -231,4 +232,20 @@ export interface SearchResult {
   total: number;
   page: number;
   limit: number;
+}
+
+// Facility Types
+export interface Facility {
+  id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  garageId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFacilityRequest {
+  name: string;
+  description: string;
 }

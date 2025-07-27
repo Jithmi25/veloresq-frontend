@@ -1,9 +1,50 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, Car, User, Phone, CreditCard, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, MapPin, Car, User, CreditCard, CheckCircle, ChevronLeft, Zap } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { bookingService } from '../services/bookingService';
+import { garageService } from '../services/garageService';
+import { toast } from 'react-toastify';
+
+interface VehicleInfo {
+  make: string;
+  model: string;
+  year: string;
+  licensePlate: string;
+}
+
+interface PersonalInfo {
+  name: string;
+  phone: string;
+  email: string;
+}
+
+interface BookingFormData {
+  garage: string;
+  service: string;
+  date: string;
+  time: string;
+  vehicleInfo: VehicleInfo;
+  personalInfo: PersonalInfo;
+  specialRequests: string;
+}
+
+interface Garage {
+  id: string;
+  name: string;
+  address: string;
+}
+
+interface Service {
+  id: string;
+  name: string;
+  price: number;
+  estimatedDuration: number;
+}
 
 const BookingPage: React.FC = () => {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<BookingFormData>({
     garage: '',
     service: '',
     date: '',
@@ -21,27 +62,101 @@ const BookingPage: React.FC = () => {
     },
     specialRequests: '',
   });
+  const [garages, setGarages] = useState<Garage[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [garageDetails, setGarageDetails] = useState<Garage | null>(null);
+  const [serviceDetails, setServiceDetails] = useState<Service | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
 
-  const garages = [
-    { id: '1', name: 'AutoCare Pro', location: 'Colombo 03', rating: 4.8, waitTime: '45 mins' },
-    { id: '2', name: 'QuickFix Garage', location: 'Kandy Road', rating: 4.6, waitTime: '1.5 hours' },
-    { id: '3', name: 'Elite Motors', location: 'Galle Road', rating: 4.9, waitTime: '30 mins' },
-  ];
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        // Get garage ID from URL if coming from search page
+        const queryParams = new URLSearchParams(location.search);
+        const garageId = queryParams.get('garage');
 
-  const services = [
-    { id: '1', name: 'Oil Change', price: 2500, duration: '30 mins' },
-    { id: '2', name: 'Brake Service', price: 8500, duration: '1.5 hours' },
-    { id: '3', name: 'Engine Diagnostic', price: 5000, duration: '45 mins' },
-    { id: '4', name: 'Full Service', price: 15000, duration: '3 hours' },
-    { id: '5', name: 'AC Service', price: 6500, duration: '2 hours' },
-    { id: '6', name: 'Tire Change', price: 3500, duration: '20 mins' },
-  ];
+        // Fetch garages
+        const garagesData = await garageService.getAllGarages();
+        setGarages(garagesData);
 
-  const timeSlots = [
-    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
-    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
-    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
-  ];
+        // If garage ID is in URL, set it in form and fetch services
+        if (garageId) {
+          setFormData(prev => ({ ...prev, garage: garageId }));
+          const servicesData = await garageService.getGarageServices(garageId);
+          setServices(servicesData);
+          
+          // Also fetch garage details for display
+          const garage = await garageService.getGarageById(garageId);
+          setGarageDetails(garage);
+        }
+      } catch (err) {
+        console.error('Failed to load initial data:', err);
+        toast.error('Failed to load garages or services');
+      }
+    };
+
+    fetchInitialData();
+  }, [location.search]);
+
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        personalInfo: {
+          name: `${user.firstName} ${user.lastName}`.trim() || '',
+          phone: user.phoneNumber || '',
+          email: user.email || '',
+        }
+      }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    // Fetch services when garage is selected
+    const fetchServices = async () => {
+      if (formData.garage) {
+        try {
+          const servicesData = await garageService.getGarageServices(formData.garage);
+          setServices(servicesData);
+          
+          // Also fetch garage details for display
+          const garage = await garageService.getGarageById(formData.garage);
+          setGarageDetails(garage);
+        } catch (err) {
+          console.error('Failed to load services:', err);
+          toast.error('Failed to load services for this garage');
+        }
+      }
+    };
+
+    fetchServices();
+  }, [formData.garage]);
+
+  useEffect(() => {
+    // Generate time slots when date is selected
+    if (formData.date) {
+      generateTimeSlots();
+    }
+  }, [formData.date]);
+
+  const generateTimeSlots = () => {
+    // This would ideally come from the backend based on garage availability
+    const slots = [];
+    const startHour = 8; // 8 AM
+    const endHour = 17; // 5 PM
+    
+    for (let hour = startHour; hour <= endHour; hour++) {
+      // Only show full hours
+      slots.push(`${hour}:00 ${hour < 12 ? 'AM' : 'PM'}`);
+    }
+    
+    setTimeSlots(slots);
+  };
 
   const handleNext = () => {
     if (step < 4) setStep(step + 1);
@@ -51,20 +166,65 @@ const BookingPage: React.FC = () => {
     if (step > 1) setStep(step - 1);
   };
 
-  const handleSubmit = () => {
-    // Handle booking submission
-    console.log('Booking submitted:', formData);
-    setStep(5); // Show confirmation
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Combine date and time into scheduledDateTime
+      const scheduledDateTime = new Date(`${formData.date}T${formData.time.split(' ')[0]}`).toISOString();
+      
+      const bookingData = {
+        garageId: formData.garage,
+        serviceId: formData.service,
+        scheduledDateTime,
+        vehicleInfo: {
+          ...formData.vehicleInfo,
+          year: parseInt(formData.vehicleInfo.year) || new Date().getFullYear()
+        },
+        specialRequests: formData.specialRequests,
+      };
+
+      const response = await bookingService.createBooking(bookingData);
+      console.log('Booking submitted:', response);
+      setStep(5);
+      toast.success('Booking confirmed successfully!');
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      toast.error('Failed to submit booking');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateFormData = (section: string, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof typeof prev],
-        [field]: value,
-      },
-    }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    
+    // Handle nested objects in form data
+    if (name.startsWith('vehicleInfo.')) {
+      const field = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        vehicleInfo: {
+          ...prev.vehicleInfo,
+          [field]: value
+        }
+      }));
+    } else if (name.startsWith('personalInfo.')) {
+      const field = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        personalInfo: {
+          ...prev.personalInfo,
+          [field]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const renderStep = () => {
@@ -72,336 +232,301 @@ const BookingPage: React.FC = () => {
       case 1:
         return (
           <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-secondary mb-6">Select Garage & Service</h3>
+            <h3 className="text-xl font-semibold text-secondary flex items-center">
+              <MapPin className="h-5 w-5 mr-2" />
+              Select Garage
+            </h3>
             
-            {/* Garage Selection */}
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-3">Choose Garage</label>
-              <div className="grid gap-4">
+            <div className="space-y-4">
+              <select
+                name="garage"
+                value={formData.garage}
+                onChange={handleChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                <option value="">Select a garage</option>
                 {garages.map((garage) => (
-                  <label
-                    key={garage.id}
-                    className={`block p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                      formData.garage === garage.id
-                        ? 'border-primary bg-yellow-50'
-                        : 'border-gray-200 hover:border-primary'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="garage"
-                      value={garage.id}
-                      checked={formData.garage === garage.id}
-                      onChange={(e) => setFormData(prev => ({ ...prev, garage: e.target.value }))}
-                      className="sr-only"
-                    />
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-semibold text-secondary">{garage.name}</h4>
-                        <p className="text-gray-600 flex items-center mt-1">
-                          <MapPin className="h-4 w-4 mr-1" />
-                          {garage.location}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-yellow-500 font-semibold">★ {garage.rating}</div>
-                        <div className="text-sm text-gray-600">{garage.waitTime}</div>
-                      </div>
-                    </div>
-                  </label>
+                  <option key={garage.id} value={garage.id}>{garage.name}</option>
                 ))}
-              </div>
-            </div>
-
-            {/* Service Selection */}
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-3">Choose Service</label>
-              <div className="grid md:grid-cols-2 gap-4">
-                {services.map((service) => (
-                  <label
-                    key={service.id}
-                    className={`block p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                      formData.service === service.id
-                        ? 'border-primary bg-yellow-50'
-                        : 'border-gray-200 hover:border-primary'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="service"
-                      value={service.id}
-                      checked={formData.service === service.id}
-                      onChange={(e) => setFormData(prev => ({ ...prev, service: e.target.value }))}
-                      className="sr-only"
-                    />
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-semibold text-secondary">{service.name}</h4>
-                        <p className="text-sm text-gray-600">{service.duration}</p>
-                      </div>
-                      <div className="text-primary font-bold">Rs. {service.price}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
+              </select>
+              
+              {garageDetails && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold">{garageDetails.name}</h4>
+                  <p className="text-sm text-gray-600">{garageDetails.address}</p>
+                </div>
+              )}
             </div>
           </div>
         );
-
       case 2:
         return (
           <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-secondary mb-6">Select Date & Time</h3>
+            <h3 className="text-xl font-semibold text-secondary flex items-center">
+              <Zap className="h-5 w-5 mr-2" />
+              Select Service
+            </h3>
             
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Date Selection */}
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-3">
-                  <Calendar className="inline h-4 w-4 mr-2" />
-                  Select Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-
-              {/* Time Selection */}
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-3">
-                  <Clock className="inline h-4 w-4 mr-2" />
-                  Select Time
-                </label>
-                <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-                  {timeSlots.map((time) => (
-                    <label
-                      key={time}
-                      className={`block p-2 text-center border-2 rounded cursor-pointer transition-all duration-200 ${
-                        formData.time === time
-                          ? 'border-primary bg-yellow-50 text-secondary'
-                          : 'border-gray-200 hover:border-primary text-gray-700'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="time"
-                        value={time}
-                        checked={formData.time === time}
-                        onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                        className="sr-only"
-                      />
-                      {time}
-                    </label>
-                  ))}
+            <div className="space-y-4">
+              <select
+                name="service"
+                value={formData.service}
+                onChange={handleChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                <option value="">Select a service</option>
+                {services.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name} (Rs. {service.price.toLocaleString()})
+                  </option>
+                ))}
+              </select>
+              
+              {serviceDetails && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold">{serviceDetails.name}</h4>
+                  <p className="text-sm text-gray-600">
+                    Price: Rs. {serviceDetails.price.toLocaleString()} | Duration: ~{serviceDetails.estimatedDuration} mins
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         );
-
       case 3:
         return (
           <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-secondary mb-6">Vehicle & Personal Information</h3>
+            <h3 className="text-xl font-semibold text-secondary flex items-center">
+              <Calendar className="h-5 w-5 mr-2" />
+              Schedule Appointment
+            </h3>
             
-            {/* Vehicle Information */}
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h4 className="font-semibold text-secondary mb-4 flex items-center">
-                <Car className="h-5 w-5 mr-2" />
-                Vehicle Information
-              </h4>
-              <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">Make</label>
+                  <label className="block text-sm font-medium text-secondary mb-2">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">Time Slot</label>
+                  <select
+                    name="time"
+                    value={formData.time}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  >
+                    <option value="">Select a time</option>
+                    {timeSlots.map((slot, idx) => (
+                      <option key={idx} value={slot}>{slot}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <h4 className="font-semibold text-secondary flex items-center">
+                  <Car className="h-5 w-5 mr-2" />
+                  Vehicle Information
+                </h4>
+                
+                <div className="space-y-3">
                   <input
                     type="text"
-                    placeholder="e.g., Toyota"
+                    name="vehicleInfo.make"
+                    placeholder="Make (e.g., Toyota)"
                     value={formData.vehicleInfo.make}
-                    onChange={(e) => updateFormData('vehicleInfo', 'make', e.target.value)}
+                    onChange={handleChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">Model</label>
                   <input
                     type="text"
-                    placeholder="e.g., Corolla"
+                    name="vehicleInfo.model"
+                    placeholder="Model (e.g., Corolla)"
                     value={formData.vehicleInfo.model}
-                    onChange={(e) => updateFormData('vehicleInfo', 'model', e.target.value)}
+                    onChange={handleChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">Year</label>
-                  <input
-                    type="number"
-                    placeholder="2020"
-                    value={formData.vehicleInfo.year}
-                    onChange={(e) => updateFormData('vehicleInfo', 'year', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">License Plate</label>
                   <input
                     type="text"
-                    placeholder="ABC-1234"
+                    name="vehicleInfo.year"
+                    placeholder="Year"
+                    value={formData.vehicleInfo.year}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    name="vehicleInfo.licensePlate"
+                    placeholder="License Plate"
                     value={formData.vehicleInfo.licensePlate}
-                    onChange={(e) => updateFormData('vehicleInfo', 'licensePlate', e.target.value)}
+                    onChange={handleChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Personal Information */}
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h4 className="font-semibold text-secondary mb-4 flex items-center">
+            
+            <div className="space-y-4">
+              <h4 className="font-semibold text-secondary flex items-center">
                 <User className="h-5 w-5 mr-2" />
                 Personal Information
               </h4>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">Full Name</label>
-                  <input
-                    type="text"
-                    placeholder="Your full name"
-                    value={formData.personalInfo.name}
-                    onChange={(e) => updateFormData('personalInfo', 'name', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    placeholder="+94 77 123 4567"
-                    value={formData.personalInfo.phone}
-                    onChange={(e) => updateFormData('personalInfo', 'phone', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-secondary mb-2">Email Address</label>
-                  <input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={formData.personalInfo.email}
-                    onChange={(e) => updateFormData('personalInfo', 'email', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
+              
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  name="personalInfo.name"
+                  placeholder="Full Name"
+                  value={formData.personalInfo.name}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                />
+                <input
+                  type="tel"
+                  name="personalInfo.phone"
+                  placeholder="Phone Number"
+                  value={formData.personalInfo.phone}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                />
+                <input
+                  type="email"
+                  name="personalInfo.email"
+                  placeholder="Email"
+                  value={formData.personalInfo.email}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                />
               </div>
             </div>
-
-            {/* Special Requests */}
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-2">Special Requests (Optional)</label>
+            
+            <div className="space-y-4">
+              <h4 className="font-semibold text-secondary">Special Requests</h4>
               <textarea
-                placeholder="Any specific requirements or notes for the service..."
+                name="specialRequests"
+                placeholder="Any special instructions or requests..."
                 value={formData.specialRequests}
-                onChange={(e) => setFormData(prev => ({ ...prev, specialRequests: e.target.value }))}
-                rows={3}
+                onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                rows={3}
               />
             </div>
           </div>
         );
-
       case 4:
-        const selectedGarage = garages.find(g => g.id === formData.garage);
-        const selectedService = services.find(s => s.id === formData.service);
+        const selectedGarage = garages.find(g => g.id === formData.garage) || garageDetails;
+        const selectedService = services.find(s => s.id === formData.service) || serviceDetails;
         
         return (
           <div className="space-y-6">
             <h3 className="text-2xl font-bold text-secondary mb-6">Confirm & Pay</h3>
             
-            {/* Booking Summary */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
+                {error}
+              </div>
+            )}
+            
             <div className="bg-gray-50 p-6 rounded-lg">
               <h4 className="font-semibold text-secondary mb-4">Booking Summary</h4>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Garage:</span>
-                  <span className="font-medium text-secondary">{selectedGarage?.name}</span>
+                  <span className="font-medium">{selectedGarage?.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Service:</span>
-                  <span className="font-medium text-secondary">{selectedService?.name}</span>
+                  <span className="font-medium">{selectedService?.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Date & Time:</span>
-                  <span className="font-medium text-secondary">{formData.date} at {formData.time}</span>
+                  <span className="font-medium">
+                    {new Date(formData.date).toLocaleDateString()} at {formData.time}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Vehicle:</span>
-                  <span className="font-medium text-secondary">
+                  <span className="font-medium">
                     {formData.vehicleInfo.year} {formData.vehicleInfo.make} {formData.vehicleInfo.model}
                   </span>
                 </div>
-                <div className="border-t pt-3 flex justify-between text-lg font-bold">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">License Plate:</span>
+                  <span className="font-medium">{formData.vehicleInfo.licensePlate}</span>
+                </div>
+                <div className="flex justify-between border-t pt-3 font-bold">
                   <span>Total:</span>
-                  <span className="text-primary">Rs. {selectedService?.price}</span>
+                  <span>Rs. {selectedService?.price.toLocaleString()}</span>
                 </div>
               </div>
             </div>
-
-            {/* Payment Method */}
+            
             <div className="bg-gray-50 p-6 rounded-lg">
               <h4 className="font-semibold text-secondary mb-4 flex items-center">
                 <CreditCard className="h-5 w-5 mr-2" />
                 Payment Method
               </h4>
               <div className="space-y-3">
-                <label className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100">
-                  <input type="radio" name="payment" defaultChecked className="mr-3" />
-                  <span>Pay at Garage</span>
-                </label>
-                <label className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100">
-                  <input type="radio" name="payment" className="mr-3" />
-                  <span>Credit/Debit Card</span>
-                </label>
-                <label className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100">
-                  <input type="radio" name="payment" className="mr-3" />
-                  <span>Mobile Payment</span>
+                <label className="flex items-center p-3 border border-gray-300 rounded-lg bg-white">
+                  <input
+                    type="radio"
+                    name="payment"
+                    defaultChecked
+                    className="mr-3"
+                  />
+                  Pay at Garage (Cash/Card)
                 </label>
               </div>
             </div>
+            
+            <div className="mt-6">
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className={`w-full bg-primary text-secondary px-6 py-3 rounded-lg font-semibold text-lg ${
+                  loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-dark'
+                }`}
+              >
+                {loading ? 'Confirming...' : 'Confirm Booking'}
+              </button>
+            </div>
           </div>
         );
-
       case 5:
         return (
-          <div className="text-center space-y-6">
-            <div className="animate-bounce-slow">
-              <CheckCircle className="h-20 w-20 text-green-500 mx-auto" />
-            </div>
+          <div className="text-center space-y-6 py-8">
+            <CheckCircle className="h-20 w-20 text-green-500 mx-auto animate-bounce" />
             <h3 className="text-3xl font-bold text-secondary">Booking Confirmed!</h3>
-            <p className="text-xl text-gray-600">
-              Your service has been successfully booked. You'll receive a confirmation SMS shortly.
+            <p className="text-lg text-gray-600">
+              Your service has been successfully booked. A confirmation has been sent to your email.
             </p>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-              <h4 className="font-semibold text-green-800 mb-2">Booking Reference: #VEL-2025-001</h4>
-              <p className="text-green-700">
-                Please arrive 10 minutes before your scheduled time. We'll send you a reminder 1 hour before your appointment.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-primary text-secondary px-6 py-3 rounded-lg font-semibold hover:bg-primary-dark transition-colors duration-200">
-                Track Booking
+            <div className="pt-6">
+              <button
+                onClick={() => navigate('/my-bookings')}
+                className="bg-primary text-white px-6 py-3 rounded-lg font-semibold mr-4 hover:bg-primary-dark"
+              >
+                View My Bookings
               </button>
-              <button 
-                onClick={() => window.location.href = '/'}
-                className="border border-secondary text-secondary px-6 py-3 rounded-lg font-semibold hover:bg-secondary hover:text-white transition-colors duration-200"
+              <button
+                onClick={() => navigate('/')}
+                className="bg-white border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50"
               >
                 Back to Home
               </button>
             </div>
           </div>
         );
-
       default:
         return null;
     }
@@ -410,64 +535,42 @@ const BookingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-light py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Progress Bar */}
         {step < 5 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              {['Select', 'Schedule', 'Details', 'Payment'].map((label, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center ${index < 3 ? 'flex-1' : ''}`}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                      step > index + 1
-                        ? 'bg-green-500 text-white'
-                        : step === index + 1
-                        ? 'bg-primary text-secondary'
-                        : 'bg-gray-300 text-gray-600'
-                    }`}
-                  >
-                    {step > index + 1 ? '✓' : index + 1}
-                  </div>
-                  <span className={`ml-2 text-sm font-medium ${
-                    step >= index + 1 ? 'text-secondary' : 'text-gray-500'
+          <button
+            onClick={() => step === 1 ? navigate('/garages') : handlePrevious()}
+            className="flex items-center text-primary mb-6 hover:text-primary-dark"
+          >
+            <ChevronLeft className="h-5 w-5 mr-1" />
+            {step === 1 ? 'Back to Garages' : 'Previous Step'}
+          </button>
+        )}
+        
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          {/* Progress Steps */}
+          {step < 5 && (
+            <div className="flex justify-between mb-8 relative">
+              <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 -z-10"></div>
+              {[1, 2, 3, 4].map((stepNumber) => (
+                <div key={stepNumber} className="flex flex-col items-center">
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                    step >= stepNumber ? 'bg-primary text-secondary' : 'bg-gray-200 text-gray-600'
                   }`}>
-                    {label}
+                    {stepNumber}
+                  </div>
+                  <span className={`text-xs mt-2 ${
+                    step >= stepNumber ? 'text-primary font-medium' : 'text-gray-500'
+                  }`}>
+                    {stepNumber === 1 && 'Garage'}
+                    {stepNumber === 2 && 'Service'}
+                    {stepNumber === 3 && 'Details'}
+                    {stepNumber === 4 && 'Confirm'}
                   </span>
-                  {index < 3 && (
-                    <div className={`flex-1 h-1 mx-4 rounded ${
-                      step > index + 1 ? 'bg-green-500' : 'bg-gray-300'
-                    }`} />
-                  )}
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Form Content */}
-        <div className="bg-white rounded-xl shadow-lg p-8 animate-fade-in">
-          {renderStep()}
-
-          {/* Navigation Buttons */}
-          {step < 5 && (
-            <div className="flex justify-between mt-8 pt-6 border-t">
-              <button
-                onClick={handlePrevious}
-                disabled={step === 1}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-              >
-                Previous
-              </button>
-              <button
-                onClick={step === 4 ? handleSubmit : handleNext}
-                className="bg-primary text-secondary px-6 py-2 rounded-lg font-semibold hover:bg-primary-dark transition-all duration-200 transform hover:scale-105"
-              >
-                {step === 4 ? 'Confirm Booking' : 'Next Step'}
-              </button>
-            </div>
           )}
+          
+          {renderStep()}
         </div>
       </div>
     </div>

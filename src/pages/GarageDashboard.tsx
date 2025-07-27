@@ -1,29 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Car, Users, Calendar, DollarSign, TrendingUp, Clock, Star, Settings, Plus, Edit, Trash2, Battery, Wrench, Zap, X, Save, User, Mail, Phone, MapPin, Building } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+
+interface Service {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+  isActive: boolean;
+}
+
+interface Booking {
+  id: string;
+  customerName: string;
+  service: string;
+  time: string;
+  status: string;
+  vehicle: string;
+  amount: number;
+}
+
+interface ChargingStation {
+  id: string;
+  name: string;
+  location: string;
+  ports: number;
+  activeCharging: number;
+}
+
+interface BatteryOwnerProfile {
+  businessName: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  address: string;
+  businessLicense: string;
+  totalStations: number;
+  totalPorts: number;
+  monthlyRevenue: number;
+  chargingStations: ChargingStation[];
+}
+
+interface GarageStats {
+  todayBookings: number;
+  totalBookings: number;
+  monthlyRevenue: number;
+  averageRating: number;
+  queueLength: number;
+  completedServices: number;
+  batteryServices: number;
+  chargingRevenue: number;
+}
 
 const GarageDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [showBatteryOwnerProfile, setShowBatteryOwnerProfile] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Check if this is a battery charge owner
-  const isBatteryChargeOwner = user?.email === 'battery@test.com';
+  const isBatteryChargeOwner = user?.role === 'battery_owner';
   
-  const [services, setServices] = useState([
-    { id: '1', name: 'Oil Change', price: 2500, duration: 30, isActive: true },
-    { id: '2', name: 'Brake Service', price: 8500, duration: 90, isActive: true },
-    { id: '3', name: 'Engine Diagnostic', price: 5000, duration: 45, isActive: true },
-    { id: '4', name: 'Battery Service', price: 4500, duration: 60, isActive: true },
-    { id: '5', name: 'AC Service', price: 6500, duration: 120, isActive: true },
-    { id: '6', name: 'Tire Service', price: 3500, duration: 20, isActive: true },
-    { id: '7', name: 'Full Service', price: 15000, duration: 180, isActive: true },
-    { id: '8', name: 'Battery Replacement', price: 8500, duration: 45, isActive: true },
-    { id: '9', name: 'Battery Testing', price: 1500, duration: 15, isActive: true },
-    { id: '10', name: 'Battery Charging', price: 500, duration: 60, isActive: true }
-  ]);
+  // State for all data
+  const [services, setServices] = useState<Service[]>([]);
+  const [batteryOwnerProfile, setBatteryOwnerProfile] = useState<BatteryOwnerProfile | null>(null);
+  const [garageStats, setGarageStats] = useState<GarageStats | null>(null);
+  const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
 
   const [newService, setNewService] = useState({
     name: '',
@@ -32,111 +78,51 @@ const GarageDashboard: React.FC = () => {
     isActive: true
   });
 
-  // Battery Charge Owner Profile Data
-  const [batteryOwnerProfile, setBatteryOwnerProfile] = useState({
-    businessName: 'PowerTech Solutions',
-    ownerName: 'Rajesh Kumar',
-    email: 'rajesh@powertech.lk',
-    phone: '+94 77 123 4567',
-    address: 'No. 123, Galle Road, Colombo 03',
-    businessLicense: 'BCO-2024-001',
-    totalStations: 3,
-    totalPorts: 18,
-    monthlyRevenue: 125000,
-    chargingStations: [
-      { id: 'CS001', name: 'PowerHub Colombo', location: 'Colombo 03', ports: 8, activeCharging: 5 },
-      { id: 'CS002', name: 'PowerHub Kandy', location: 'Kandy', ports: 6, activeCharging: 3 },
-      { id: 'CS003', name: 'PowerHub Galle', location: 'Galle', ports: 4, activeCharging: 2 }
-    ]
-  });
+  // API base URL
+  const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5008/api';
 
-  // HARDCODED DATA - Replace with backend integration
-  const garageStats = isBatteryChargeOwner ? {
-    todayBookings: 8,
-    totalBookings: 89,
-    monthlyRevenue: 125000,
-    averageRating: 4.9,
-    queueLength: 2,
-    completedServices: 78,
-    batteryServices: 89,
-    chargingRevenue: 125000
-  } : {
-    todayBookings: 12,
-    totalBookings: 156,
-    monthlyRevenue: 485000,
-    averageRating: 4.8,
-    queueLength: 5,
-    completedServices: 142,
-    batteryServices: 45,
-    chargingRevenue: 25000
+  // Fetch all dashboard data
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch garage stats
+      const statsResponse = await axios.get(`${API_URL}/garages/stats`, {
+        headers: { Authorization: `Bearer ${user?.token}` }
+      });
+      setGarageStats(statsResponse.data);
+
+      // Fetch services
+      const servicesResponse = await axios.get(`${API_URL}/garages/services`, {
+        headers: { Authorization: `Bearer ${user?.token}` }
+      });
+      setServices(servicesResponse.data);
+
+      // Fetch recent bookings
+      const bookingsResponse = await axios.get(`${API_URL}/bookings/recent`, {
+        headers: { Authorization: `Bearer ${user?.token}` }
+      });
+      setRecentBookings(bookingsResponse.data);
+
+      // If battery owner, fetch profile
+      if (isBatteryChargeOwner) {
+        const profileResponse = await axios.get(`${API_URL}/users/profile`, {
+          headers: { Authorization: `Bearer ${user?.token}` }
+        });
+        setBatteryOwnerProfile(profileResponse.data);
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const recentBookings = isBatteryChargeOwner ? [
-    {
-      id: 'B001',
-      customerName: 'Priya Sharma',
-      service: 'Fast Charging',
-      time: '10:00 AM',
-      status: 'in_progress',
-      vehicle: '2022 Tesla Model 3',
-      amount: 1500
-    },
-    {
-      id: 'B002',
-      customerName: 'Anil Fernando',
-      service: 'Standard Charging',
-      time: '11:30 AM',
-      status: 'confirmed',
-      vehicle: '2021 Nissan Leaf',
-      amount: 800
-    },
-    {
-      id: 'B003',
-      customerName: 'Kavitha Perera',
-      service: 'Super Fast Charging',
-      time: '2:00 PM',
-      status: 'pending',
-      vehicle: '2023 BMW iX',
-      amount: 2000
-    }
-  ] : [
-    {
-      id: 'B001',
-      customerName: 'John Silva',
-      service: 'Oil Change',
-      time: '10:00 AM',
-      status: 'in_progress',
-      vehicle: '2020 Toyota Corolla',
-      amount: 2500
-    },
-    {
-      id: 'B002',
-      customerName: 'Maya Perera',
-      service: 'Battery Charging',
-      time: '11:30 AM',
-      status: 'confirmed',
-      vehicle: '2021 Nissan Leaf',
-      amount: 500
-    },
-    {
-      id: 'B003',
-      customerName: 'Ravi Kumar',
-      service: 'Battery Service',
-      time: '2:00 PM',
-      status: 'pending',
-      vehicle: '2021 Nissan Sentra',
-      amount: 4500
-    },
-    {
-      id: 'B004',
-      customerName: 'Sara Fernando',
-      service: 'Engine Diagnostic',
-      time: '3:30 PM',
-      status: 'confirmed',
-      vehicle: '2018 Suzuki Swift',
-      amount: 5000
-    }
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, [user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -163,20 +149,29 @@ const GarageDashboard: React.FC = () => {
     }
   };
 
-  const handleAddService = () => {
+  const handleAddService = async () => {
     if (newService.name && newService.price && newService.duration) {
-      const service = {
-        id: Date.now().toString(),
-        name: newService.name,
-        price: parseInt(newService.price),
-        duration: parseInt(newService.duration),
-        isActive: newService.isActive
-      };
-      setServices([...services, service]);
-      setNewService({ name: '', price: '', duration: '', isActive: true });
-      setShowAddServiceModal(false);
-      // TODO: BACKEND INTEGRATION - Save service to backend
-      console.log('Add service:', service);
+      try {
+        const serviceData = {
+          name: newService.name,
+          price: parseInt(newService.price),
+          duration: parseInt(newService.duration),
+          isActive: newService.isActive,
+          garageId: user?.garageId
+        };
+
+        const response = await axios.post(`${API_URL}/garages/services`, serviceData, {
+          headers: { Authorization: `Bearer ${user?.token}` }
+        });
+
+        setServices([...services, response.data]);
+        setNewService({ name: '', price: '', duration: '', isActive: true });
+        setShowAddServiceModal(false);
+        toast.success('Service added successfully');
+      } catch (error) {
+        console.error('Error adding service:', error);
+        toast.error('Failed to add service');
+      }
     }
   };
 
@@ -184,32 +179,82 @@ const GarageDashboard: React.FC = () => {
     setEditingService(serviceId);
   };
 
-  const handleSaveService = (serviceId: string) => {
-    setEditingService(null);
-    // TODO: BACKEND INTEGRATION - Update service in backend
-    console.log('Save service:', serviceId);
-  };
+  const handleSaveService = async (serviceId: string) => {
+    try {
+      const serviceToUpdate = services.find(s => s.id === serviceId);
+      if (!serviceToUpdate) return;
 
-  const handleDeleteService = (serviceId: string) => {
-    if (confirm('Are you sure you want to delete this service?')) {
-      setServices(services.filter(s => s.id !== serviceId));
-      // TODO: BACKEND INTEGRATION - Delete service from backend
-      console.log('Delete service:', serviceId);
+      await axios.put(`${API_URL}/garages/services/${serviceId}`, serviceToUpdate, {
+        headers: { Authorization: `Bearer ${user?.token}` }
+      });
+
+      setEditingService(null);
+      toast.success('Service updated successfully');
+    } catch (error) {
+      console.error('Error updating service:', error);
+      toast.error('Failed to update service');
     }
   };
 
-  const toggleServiceStatus = (serviceId: string) => {
-    setServices(services.map(s => 
-      s.id === serviceId ? { ...s, isActive: !s.isActive } : s
-    ));
-    // TODO: BACKEND INTEGRATION - Update service status
-    console.log('Toggle service status:', serviceId);
+  const handleDeleteService = async (serviceId: string) => {
+    if (confirm('Are you sure you want to delete this service?')) {
+      try {
+        await axios.delete(`${API_URL}/garages/services/${serviceId}`, {
+          headers: { Authorization: `Bearer ${user?.token}` }
+        });
+
+        setServices(services.filter(s => s.id !== serviceId));
+        toast.success('Service deleted successfully');
+      } catch (error) {
+        console.error('Error deleting service:', error);
+        toast.error('Failed to delete service');
+      }
+    }
+  };
+
+  const toggleServiceStatus = async (serviceId: string) => {
+    try {
+      const service = services.find(s => s.id === serviceId);
+      if (!service) return;
+
+      const updatedStatus = !service.isActive;
+      
+      await axios.patch(`${API_URL}/garages/services/${serviceId}/status`, 
+        { isActive: updatedStatus },
+        { headers: { Authorization: `Bearer ${user?.token}` } }
+      );
+
+      setServices(services.map(s => 
+        s.id === serviceId ? { ...s, isActive: updatedStatus } : s
+      ));
+      toast.success(`Service ${updatedStatus ? 'activated' : 'deactivated'}`);
+    } catch (error) {
+      console.error('Error toggling service status:', error);
+      toast.error('Failed to update service status');
+    }
   };
 
   const updateServiceField = (serviceId: string, field: string, value: any) => {
     setServices(services.map(s => 
       s.id === serviceId ? { ...s, [field]: value } : s
     ));
+  };
+
+  const updateBookingStatus = async (bookingId: string, status: string) => {
+    try {
+      await axios.put(`${API_URL}/bookings/${bookingId}/status`, 
+        { status },
+        { headers: { Authorization: `Bearer ${user?.token}` } }
+      );
+
+      setRecentBookings(recentBookings.map(booking => 
+        booking.id === bookingId ? { ...booking, status } : booking
+      ));
+      toast.success('Booking status updated');
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      toast.error('Failed to update booking status');
+    }
   };
 
   const renderOverview = () => (
@@ -220,7 +265,7 @@ const GarageDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">Today's {isBatteryChargeOwner ? 'Charging Sessions' : 'Bookings'}</p>
-              <p className="text-2xl font-bold text-secondary mt-1">{garageStats.todayBookings}</p>
+              <p className="text-2xl font-bold text-secondary mt-1">{garageStats?.todayBookings || 0}</p>
               <p className="text-sm text-green-600 mt-1">+3 from yesterday</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
@@ -233,7 +278,7 @@ const GarageDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">{isBatteryChargeOwner ? 'Charging Sessions' : 'Battery Services'}</p>
-              <p className="text-2xl font-bold text-secondary mt-1">{garageStats.batteryServices}</p>
+              <p className="text-2xl font-bold text-secondary mt-1">{garageStats?.batteryServices || 0}</p>
               <p className="text-sm text-green-600 mt-1">+18% this month</p>
             </div>
             <div className="p-3 bg-yellow-100 rounded-full">
@@ -246,7 +291,7 @@ const GarageDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">Monthly Revenue</p>
-              <p className="text-2xl font-bold text-secondary mt-1">Rs. {garageStats.monthlyRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-secondary mt-1">Rs. {garageStats?.monthlyRevenue?.toLocaleString() || 0}</p>
               <p className="text-sm text-green-600 mt-1">+8% from last month</p>
             </div>
             <div className="p-3 bg-primary rounded-full">
@@ -259,7 +304,7 @@ const GarageDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">Average Rating</p>
-              <p className="text-2xl font-bold text-secondary mt-1">{garageStats.averageRating}</p>
+              <p className="text-2xl font-bold text-secondary mt-1">{garageStats?.averageRating || 0}</p>
               <p className="text-sm text-green-600 mt-1">+0.2 this month</p>
             </div>
             <div className="p-3 bg-yellow-100 rounded-full">
@@ -277,7 +322,7 @@ const GarageDashboard: React.FC = () => {
         </h3>
         <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
           <div>
-            <p className="text-2xl font-bold text-secondary">{garageStats.queueLength} {isBatteryChargeOwner ? 'vehicles charging' : 'vehicles'}</p>
+            <p className="text-2xl font-bold text-secondary">{garageStats?.queueLength || 0} {isBatteryChargeOwner ? 'vehicles charging' : 'vehicles'}</p>
             <p className="text-gray-600">{isBatteryChargeOwner ? 'Currently charging' : 'Currently in queue'}</p>
           </div>
           <div>
@@ -329,6 +374,30 @@ const GarageDashboard: React.FC = () => {
                   <p className="text-secondary font-semibold">Rs. {booking.amount.toLocaleString()}</p>
                 </div>
               </div>
+              <div className="flex space-x-2 mt-3">
+                {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                  <>
+                    <button 
+                      onClick={() => updateBookingStatus(booking.id, 'in_progress')}
+                      className="text-xs bg-blue-100 text-blue-600 px-3 py-1 rounded hover:bg-blue-200"
+                    >
+                      Start
+                    </button>
+                    <button 
+                      onClick={() => updateBookingStatus(booking.id, 'completed')}
+                      className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded hover:bg-green-200"
+                    >
+                      Complete
+                    </button>
+                    <button 
+                      onClick={() => updateBookingStatus(booking.id, 'cancelled')}
+                      className="text-xs bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -356,7 +425,7 @@ const GarageDashboard: React.FC = () => {
             <Battery className="h-6 w-6 mr-2 text-yellow-600" />
             {isBatteryChargeOwner ? 'Charging Services - Featured' : 'Battery & Charging Services - Featured'}
           </h4>
-          {!isBatteryChargeOwner && (
+          {!isBatteryChargeOwner && batteryOwnerProfile && (
             <button
               onClick={() => setShowBatteryOwnerProfile(true)}
               className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors duration-200 flex items-center"
@@ -625,7 +694,7 @@ const GarageDashboard: React.FC = () => {
       )}
 
       {/* Battery Charge Owner Profile Modal */}
-      {showBatteryOwnerProfile && (
+      {showBatteryOwnerProfile && batteryOwnerProfile && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
@@ -774,15 +843,15 @@ const GarageDashboard: React.FC = () => {
         <h4 className="text-xl font-bold text-secondary mb-4">Monthly Performance</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-secondary">{garageStats.completedServices}</p>
+            <p className="text-2xl font-bold text-secondary">{garageStats?.completedServices || 0}</p>
             <p className="text-gray-600">Total Services</p>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-secondary">Rs. {garageStats.monthlyRevenue.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-secondary">Rs. {garageStats?.monthlyRevenue?.toLocaleString() || 0}</p>
             <p className="text-gray-600">Revenue</p>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-secondary">{garageStats.averageRating}★</p>
+            <p className="text-2xl font-bold text-secondary">{garageStats?.averageRating || 0}★</p>
             <p className="text-gray-600">Avg Rating</p>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
@@ -795,6 +864,14 @@ const GarageDashboard: React.FC = () => {
   );
 
   const renderTabContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'overview':
         return renderOverview();

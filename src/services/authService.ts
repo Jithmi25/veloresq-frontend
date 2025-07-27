@@ -1,119 +1,52 @@
 import { apiService } from './api';
-import { User, LoginRequest, RegisterRequest, ApiResponse } from '../types';
+import { User, LoginRequest, RegisterRequest, Facility, CreateFacilityRequest } from '../types';
 
 export class AuthService {
   async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
     try {
-      // TODO: BACKEND INTEGRATION - Replace with actual API call
-      // const response = await apiService.post<{ user: User; token: string }>('/auth/login', credentials);
+      const response = await apiService.post<{ user: User; token: string }>('/auth/login', {
+        email: credentials.email,
+        password: credentials.password,
+        role: credentials.role
+      });
       
-      // HARDCODED DATA FOR TESTING - Remove when backend is connected
-      const mockUsers = [
-        {
-          id: '1',
-          email: 'admin@veloresq.com',
-          firstName: 'Admin',
-          lastName: 'User',
-          phoneNumber: '+94 77 123 4567',
-          role: 'admin' as const,
-          isVerified: true,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        },
-        {
-          id: '2',
-          email: 'customer@test.com',
-          firstName: 'John',
-          lastName: 'Doe',
-          phoneNumber: '+94 77 234 5678',
-          role: 'customer' as const,
-          isVerified: true,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        },
-        {
-          id: '3',
-          email: 'garage@test.com',
-          firstName: 'Garage',
-          lastName: 'Owner',
-          phoneNumber: '+94 77 345 6789',
-          role: 'garage_owner' as const,
-          isVerified: true,
-          garageName: 'Test Garage',
-          garageAddress: 'Test Address',
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        },
-        {
-          id: '4',
-          email: 'battery@test.com',
-          firstName: 'Rajesh',
-          lastName: 'Kumar',
-          phoneNumber: '+94 77 456 7890',
-          role: 'garage_owner' as const,
-          isVerified: true,
-          garageName: 'PowerTech Solutions',
-          garageAddress: 'No. 123, Galle Road, Colombo 03',
-          businessLicense: 'BCO-2024-001',
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        }
-      ];
-
-      // Simulate login validation
-      const user = mockUsers.find(u => u.email === credentials.email);
-      if (!user || credentials.password !== 'password123') {
-        throw new Error('Invalid email or password');
+      if (response.success && response.data) {
+        localStorage.setItem('authToken', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return response.data;
       }
-
-      const mockToken = 'mock-jwt-token-' + user.id;
-      const result = { user, token: mockToken };
-
-      localStorage.setItem('authToken', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      return result;
+      
+      throw new Error(response.message || 'Login failed');
     } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
       throw new Error(error.message || 'Login failed');
     }
   }
 
   async register(userData: RegisterRequest): Promise<{ user: User; token: string }> {
     try {
-      // TODO: BACKEND INTEGRATION - Replace with actual API call
-      // const response = await apiService.post<{ user: User; token: string }>('/auth/register', userData);
+      const response = await apiService.post<{ user: User; token: string }>('/auth/register', userData);
       
-      // HARDCODED DATA FOR TESTING - Remove when backend is connected
-      const newUser: User = {
-        id: 'new-user-' + Date.now(),
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        phoneNumber: userData.phoneNumber,
-        role: userData.role,
-        isVerified: false,
-        garageName: userData.garageName,
-        garageAddress: userData.garageAddress,
-        businessLicense: userData.businessLicense,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      const mockToken = 'mock-jwt-token-' + newUser.id;
-      const result = { user: newUser, token: mockToken };
-
-      localStorage.setItem('authToken', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      return result;
+      if (response.success && response.data) {
+        localStorage.setItem('authToken', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return response.data;
+      }
+      
+      throw new Error(response.message || 'Registration failed');
     } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
       throw new Error(error.message || 'Registration failed');
     }
   }
 
   async logout(): Promise<void> {
     try {
-      // TODO: BACKEND INTEGRATION - Add actual logout API call
-      // await apiService.post('/auth/logout');
-      console.log('Logout - Backend integration needed');
+      await apiService.post('/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -124,14 +57,13 @@ export class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      // TODO: BACKEND INTEGRATION - Replace with actual API call
-      // const response = await apiService.get<User>('/auth/me');
+      const response = await apiService.get<{ user: User }>('/auth/me');
       
-      // HARDCODED DATA FOR TESTING - Use stored user data
-      const storedUser = this.getStoredUser();
-      if (storedUser && this.isAuthenticated()) {
-        return storedUser;
+      if (response.success && response.data) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return response.data.user;
       }
+      
       return null;
     } catch (error) {
       console.error('Get current user error:', error);
@@ -141,33 +73,87 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<void> {
-    // TODO: BACKEND INTEGRATION - Add forgot password API call
-    // const response = await apiService.post('/auth/forgot-password', { email });
-    console.log('Forgot password for:', email, '- Backend integration needed');
-    
-    // Simulate API delay for testing
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // For testing, we'll just log the action
-    // In real implementation, this would send an email with reset link
+    try {
+      const response = await apiService.post('/auth/forgot-password', { email });
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to send reset email');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to send reset email');
+    }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
-    // TODO: BACKEND INTEGRATION - Add reset password API call
-    // const response = await apiService.post('/auth/reset-password', { token, password: newPassword });
-    console.log('Reset password - Backend integration needed');
-    
-    // Simulate API delay for testing
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // For testing, we'll just log the action
-    // In real implementation, this would update the user's password
+    try {
+      const response = await apiService.post('/auth/reset-password', { 
+        token, 
+        password: newPassword 
+      });
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to reset password');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to reset password');
+    }
   }
 
   async verifyEmail(token: string): Promise<void> {
-    // TODO: BACKEND INTEGRATION - Add email verification API call
-    // const response = await apiService.post('/auth/verify-email', { token });
-    console.log('Verify email - Backend integration needed');
+    try {
+      const response = await apiService.post('/auth/verify-email', { token });
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Email verification failed');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Email verification failed');
+    }
+  }
+
+  async updateProfile(profileData: Partial<User>): Promise<User> {
+    try {
+      const response = await apiService.put<{ user: User }>('/users/profile', profileData);
+      
+      if (response.success && response.data) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return response.data.user;
+      }
+      
+      throw new Error(response.message || 'Failed to update profile');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to update profile');
+    }
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    try {
+      const response = await apiService.put('/users/change-password', {
+        currentPassword,
+        newPassword
+      });
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to change password');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to change password');
+    }
   }
 
   getStoredUser(): User | null {
@@ -188,4 +174,94 @@ export class AuthService {
   }
 }
 
+export class FacilityService {
+  async getGarageFacilities(): Promise<{ facilities: Facility[] }> {
+    try {
+      const response = await apiService.get<{ facilities: Facility[] }>('/facilities');
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      throw new Error(response.message || 'Failed to get facilities');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to get facilities');
+    }
+  }
+
+  async addFacility(facilityData: CreateFacilityRequest): Promise<{ facility: Facility }> {
+    try {
+      const response = await apiService.post<{ facility: Facility }>('/facilities', facilityData);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      throw new Error(response.message || 'Failed to add facility');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to add facility');
+    }
+  }
+
+  async deleteFacility(id: string): Promise<void> {
+    try {
+      const response = await apiService.delete(`/facilities/${id}`);
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to delete facility');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to delete facility');
+    }
+  }
+
+  async updateFacilityStatus(id: string, isActive: boolean): Promise<Facility> {
+    try {
+      const response = await apiService.put<{ facility: Facility }>(`/facilities/${id}`, { isActive });
+      
+      if (response.success && response.data) {
+        return response.data.facility;
+      }
+      
+      throw new Error(response.message || 'Failed to update facility status');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to update facility status');
+    }
+  }
+}
+
+export class UserService {
+  async updateUserProfile(profileData: Partial<User>): Promise<User> {
+    try {
+      const response = await apiService.put<{ user: User }>('/users/profile', profileData);
+      
+      if (response.success && response.data) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return response.data.user;
+      }
+      
+      throw new Error(response.message || 'Failed to update profile');
+    } catch (error: any) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to update profile');
+    }
+  }
+}
+
 export const authService = new AuthService();
+export const facilityService = new FacilityService();
+export const userService = new UserService();

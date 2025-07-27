@@ -4,6 +4,9 @@ import { useLocation } from '../hooks/useLocation';
 import { garageService } from '../services/garageService';
 import { Garage, SearchFilters } from '../types';
 import GarageCard from '../components/GarageCard';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { toast } from 'react-toastify';
 
 const GarageSearchPage: React.FC = () => {
   const [garages, setGarages] = useState<Garage[]>([]);
@@ -13,6 +16,8 @@ const GarageSearchPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
+  const navigate = useNavigate();
+  const { user } = useAuth();
   
   const { latitude, longitude, getCurrentLocation, isLoading: locationLoading, error: locationError } = useLocation();
 
@@ -74,61 +79,27 @@ const GarageSearchPage: React.FC = () => {
         rating: filters.rating > 0 ? filters.rating : undefined,
         priceRange: filters.priceRange.min > 0 || filters.priceRange.max < 50000 ? filters.priceRange : undefined,
         availability: filters.availability,
+        openNow: filters.openNow,
       };
 
-      // Add text search and location filters
-      const result = await garageService.searchGarages(searchFilters, currentPage, 12);
+      const result = await garageService.searchGarages({
+        ...searchFilters,
+        searchTerm: searchTerm,
+        district: filters.district,
+        city: filters.city,
+        sortBy: filters.sortBy,
+        page: currentPage,
+        limit: 12
+      });
       
-      // Filter by district/city if specified
-      let filteredGarages = result.garages;
-      if (filters.district) {
-        filteredGarages = filteredGarages.filter(garage => 
-          garage.city.toLowerCase().includes(filters.district.toLowerCase()) ||
-          garage.address.toLowerCase().includes(filters.district.toLowerCase())
-        );
-      }
-      if (filters.city) {
-        filteredGarages = filteredGarages.filter(garage => 
-          garage.city.toLowerCase().includes(filters.city.toLowerCase())
-        );
-      }
-      if (searchTerm) {
-        filteredGarages = filteredGarages.filter(garage =>
-          garage.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          garage.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          garage.address.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      }
-
-      // Sort results
-      filteredGarages = sortGarages(filteredGarages);
-
-      setGarages(filteredGarages);
-      setTotalResults(filteredGarages.length);
+      setGarages(result.garages);
+      setTotalResults(result.totalCount);
     } catch (error) {
       console.error('Search error:', error);
+      toast.error('Failed to search garages');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const sortGarages = (garages: Garage[]) => {
-    return [...garages].sort((a, b) => {
-      switch (filters.sortBy) {
-        case 'rating':
-          return b.rating - a.rating;
-        case 'distance':
-          // This would need actual distance calculation
-          return 0;
-        case 'price':
-          // This would need average price calculation
-          return 0;
-        case 'availability':
-          return a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1;
-        default:
-          return 0;
-      }
-    });
   };
 
   const handleFilterChange = (key: string, value: any) => {
@@ -169,6 +140,15 @@ const GarageSearchPage: React.FC = () => {
     getCurrentLocation();
   };
 
+  const handleBookNow = (garageId: string) => {
+    if (!user) {
+      toast.info('Please login to book a garage');
+      navigate('/login', { state: { from: '/garages' } });
+      return;
+    }
+    navigate(`/booking?garage=${garageId}`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-light py-8 px-4">
       <div className="max-w-7xl mx-auto">
@@ -189,6 +169,7 @@ const GarageSearchPage: React.FC = () => {
                 placeholder="Search garages, services, or locations..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && searchGarages()}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
@@ -287,7 +268,7 @@ const GarageSearchPage: React.FC = () => {
                 <label className="block text-sm font-medium text-secondary mb-2">Sort By</label>
                 <select
                   value={filters.sortBy}
-                  onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+                  onChange={(e) => handleFilterChange('sortBy', e.target.value as any)}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                   <option value="distance">Distance</option>
@@ -435,17 +416,14 @@ const GarageSearchPage: React.FC = () => {
                   id={garage.id}
                   name={garage.name}
                   location={garage.address}
-                  distance={2.5} // This would be calculated based on user location
+                  distance={garage.distance}
                   rating={garage.rating}
                   reviewCount={garage.reviewCount}
-                  queueLength={Math.floor(Math.random() * 10)} // Mock data
-                  estimatedWait={`${Math.floor(Math.random() * 120) + 15} mins`} // Mock data
-                  services={garage.services.map(service => ({
-                    name: service.name,
-                    price: service.price,
-                    duration: `${service.estimatedDuration} mins`
-                  }))}
+                  queueLength={garage.queueLength}
+                  estimatedWait={garage.estimatedWaitTime}
+                  services={garage.services}
                   status={garage.isActive ? 'open' : 'closed'}
+                  onBookNow={() => handleBookNow(garage.id)}
                 />
               </div>
             ))}

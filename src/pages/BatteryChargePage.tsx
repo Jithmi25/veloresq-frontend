@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Search, MapPin, Battery, Zap, Clock, Star, Navigation, Phone, Filter, Map, List } from 'lucide-react';
 import { useLocation } from '../hooks/useLocation';
 
@@ -56,115 +57,37 @@ const BatteryChargePage: React.FC = () => {
   const loadChargingStations = async () => {
     setIsLoading(true);
     try {
-      // TODO: BACKEND INTEGRATION - Replace with actual API call
-      const mockStations: ChargingStation[] = [
-        {
-          id: '1',
-          name: 'PowerHub Colombo',
-          address: 'No. 123, Galle Road, Colombo 03',
-          city: 'Colombo',
-          latitude: 6.9271,
-          longitude: 79.8612,
-          distance: 2.5,
-          rating: 4.8,
-          reviewCount: 156,
-          isOpen: true,
-          chargingPorts: [
-            { id: '1', type: 'Type 2', power: '22kW', status: 'available' },
-            { id: '2', type: 'CCS', power: '50kW', status: 'occupied', estimatedTime: '25 mins' },
-            { id: '3', type: 'CHAdeMO', power: '50kW', status: 'available' },
-            { id: '4', type: 'Tesla', power: '120kW', status: 'available' }
-          ],
-          amenities: ['WiFi', 'Cafe', 'Parking', '24/7 Access'],
-          pricing: { fastCharge: 45, standardCharge: 25, currency: 'LKR' },
-          operatingHours: '24/7',
-          phoneNumber: '+94 11 234 5678',
-          ownerId: 'owner1',
-          ownerType: 'battery_charge_owner'
-        },
-        {
-          id: '2',
-          name: 'EcoCharge Kandy',
-          address: 'No. 456, Peradeniya Road, Kandy',
-          city: 'Kandy',
-          latitude: 7.2906,
-          longitude: 80.6337,
-          distance: 4.1,
-          rating: 4.6,
-          reviewCount: 89,
-          isOpen: true,
-          chargingPorts: [
-            { id: '5', type: 'Type 2', power: '22kW', status: 'available' },
-            { id: '6', type: 'CCS', power: '50kW', status: 'available' },
-            { id: '7', type: 'Type 1', power: '7kW', status: 'maintenance' }
-          ],
-          amenities: ['WiFi', 'Restroom', 'Shopping'],
-          pricing: { fastCharge: 40, standardCharge: 22, currency: 'LKR' },
-          operatingHours: '6:00 AM - 10:00 PM',
-          phoneNumber: '+94 81 234 5678',
-          ownerId: 'owner2',
-          ownerType: 'garage_owner'
-        },
-        {
-          id: '3',
-          name: 'QuickCharge Galle',
-          address: 'No. 789, Main Street, Galle',
-          city: 'Galle',
-          latitude: 6.0329,
-          longitude: 80.2168,
-          distance: 6.8,
-          rating: 4.9,
-          reviewCount: 203,
-          isOpen: true,
-          chargingPorts: [
-            { id: '8', type: 'Tesla', power: '150kW', status: 'available' },
-            { id: '9', type: 'CCS', power: '75kW', status: 'available' },
-            { id: '10', type: 'Type 2', power: '22kW', status: 'occupied', estimatedTime: '45 mins' }
-          ],
-          amenities: ['WiFi', 'Cafe', 'Parking', 'Restroom'],
-          pricing: { fastCharge: 50, standardCharge: 28, currency: 'LKR' },
-          operatingHours: '24/7',
-          phoneNumber: '+94 91 234 5678',
-          ownerId: 'owner3',
-          ownerType: 'battery_charge_owner'
-        }
-      ];
-
-      // Apply filters
-      let filteredStations = mockStations;
-      
-      if (searchTerm) {
-        filteredStations = filteredStations.filter(station =>
-          station.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          station.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          station.city.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+      // Build query parameters
+      const params: any = {};
+      if (searchTerm) params.search = searchTerm;
+      if (selectedChargerType) params.chargerType = selectedChargerType;
+      if (maxDistance) params.maxDistance = maxDistance;
+      if (sortBy) params.sortBy = sortBy;
+      if (latitude && longitude) {
+        params.latitude = latitude;
+        params.longitude = longitude;
       }
 
-      if (selectedChargerType) {
-        filteredStations = filteredStations.filter(station =>
-          station.chargingPorts.some(port => port.type === selectedChargerType)
-        );
+      // Call backend API - update URL as needed
+      const response = await axios.get('/api/battery-charging-stations', { params });
+
+      // Ensure response.data is an array before setting stations
+      const stationsData = response.data;
+      if (Array.isArray(stationsData)) {
+        setStations(stationsData);
+      } else if (stationsData && Array.isArray(stationsData.stations)) {
+        // Handle case where data is nested under a 'stations' property
+        setStations(stationsData.stations);
+      } else if (stationsData && Array.isArray(stationsData.data)) {
+        // Handle case where data is nested under a 'data' property
+        setStations(stationsData.data);
+      } else {
+        console.warn('API response is not in expected format:', stationsData);
+        setStations([]);
       }
-
-      filteredStations = filteredStations.filter(station => station.distance <= maxDistance);
-
-      // Sort stations
-      filteredStations.sort((a, b) => {
-        switch (sortBy) {
-          case 'rating':
-            return b.rating - a.rating;
-          case 'price':
-            return a.pricing.standardCharge - b.pricing.standardCharge;
-          case 'distance':
-          default:
-            return a.distance - b.distance;
-        }
-      });
-
-      setStations(filteredStations);
     } catch (error) {
       console.error('Failed to load charging stations:', error);
+      setStations([]); // Clear stations on error
     } finally {
       setIsLoading(false);
     }

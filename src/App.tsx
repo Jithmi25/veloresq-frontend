@@ -18,6 +18,7 @@ import GarageSearchPage from './pages/GarageSearchPage';
 import BatteryChargePage from './pages/BatteryChargePage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -35,6 +36,14 @@ function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/garages" element={<GarageSearchPage />} />
               <Route path="/battery-charging" element={<BatteryChargePage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
               <Route 
                 path="/booking" 
                 element={

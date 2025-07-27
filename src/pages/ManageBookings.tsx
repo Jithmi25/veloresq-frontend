@@ -1,98 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, User, Car, Phone, Mail, CheckCircle, XCircle, AlertCircle, Filter, Search, Download } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { bookingService } from '../services/bookingService';
+import { toast } from 'react-toastify';
+
+interface Booking {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  service: string;
+  vehicle: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: string;
+  amount: number;
+  specialRequests: string;
+  createdAt: string;
+}
 
 const ManageBookings: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
 
-  // HARDCODED DATA - Replace with backend integration
-  const bookings = [
-    {
-      id: 'B001',
-      customerName: 'John Silva',
-      customerPhone: '+94 77 123 4567',
-      customerEmail: 'john.silva@email.com',
-      service: 'Oil Change',
-      vehicle: '2020 Toyota Corolla - ABC-1234',
-      scheduledDate: '2025-01-15',
-      scheduledTime: '10:00 AM',
-      status: 'confirmed',
-      amount: 2500,
-      specialRequests: 'Please check tire pressure as well',
-      createdAt: '2025-01-10T08:30:00Z'
-    },
-    {
-      id: 'B002',
-      customerName: 'Maya Perera',
-      customerPhone: '+94 77 234 5678',
-      customerEmail: 'maya.perera@email.com',
-      service: 'Brake Service',
-      vehicle: '2019 Honda Civic - XYZ-5678',
-      scheduledDate: '2025-01-15',
-      scheduledTime: '11:30 AM',
-      status: 'in_progress',
-      amount: 8500,
-      specialRequests: '',
-      createdAt: '2025-01-12T14:20:00Z'
-    },
-    {
-      id: 'B003',
-      customerName: 'Ravi Kumar',
-      customerPhone: '+94 77 345 6789',
-      customerEmail: 'ravi.kumar@email.com',
-      service: 'Battery Service',
-      vehicle: '2021 Nissan Sentra - DEF-9012',
-      scheduledDate: '2025-01-15',
-      scheduledTime: '2:00 PM',
-      status: 'pending',
-      amount: 4500,
-      specialRequests: 'Customer will bring own battery',
-      createdAt: '2025-01-13T09:15:00Z'
-    },
-    {
-      id: 'B004',
-      customerName: 'Sara Fernando',
-      customerPhone: '+94 77 456 7890',
-      customerEmail: 'sara.fernando@email.com',
-      service: 'Engine Diagnostic',
-      vehicle: '2018 Suzuki Swift - GHI-3456',
-      scheduledDate: '2025-01-15',
-      scheduledTime: '3:30 PM',
-      status: 'confirmed',
-      amount: 5000,
-      specialRequests: 'Engine making strange noise',
-      createdAt: '2025-01-11T16:45:00Z'
-    },
-    {
-      id: 'B005',
-      customerName: 'David Wilson',
-      customerPhone: '+94 77 567 8901',
-      customerEmail: 'david.wilson@email.com',
-      service: 'AC Service',
-      vehicle: '2020 Hyundai i20 - JKL-7890',
-      scheduledDate: '2025-01-16',
-      scheduledTime: '9:00 AM',
-      status: 'completed',
-      amount: 6500,
-      specialRequests: 'AC not cooling properly',
-      createdAt: '2025-01-09T11:30:00Z'
-    },
-    {
-      id: 'B006',
-      customerName: 'Lisa Chen',
-      customerPhone: '+94 77 678 9012',
-      customerEmail: 'lisa.chen@email.com',
-      service: 'Full Service',
-      vehicle: '2019 Mitsubishi Lancer - MNO-2345',
-      scheduledDate: '2025-01-16',
-      scheduledTime: '10:30 AM',
-      status: 'cancelled',
-      amount: 15000,
-      specialRequests: 'Complete vehicle inspection needed',
-      createdAt: '2025-01-08T13:20:00Z'
-    }
-  ];
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setIsLoading(true);
+        const bookingsData = await bookingService.getGarageBookings(user?.garageId || '');
+        setBookings(bookingsData);
+      } catch (error) {
+        console.error('Failed to fetch bookings:', error);
+        toast.error('Failed to load bookings. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, [user?.garageId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -126,16 +76,46 @@ const ManageBookings: React.FC = () => {
     return matchesFilter && matchesSearch && matchesDate;
   });
 
-  const updateBookingStatus = (bookingId: string, newStatus: string) => {
-    // TODO: BACKEND INTEGRATION - Update booking status
-    console.log('Update booking status:', bookingId, newStatus);
-    alert(`Booking ${bookingId} status updated to ${newStatus}`);
+  const updateBookingStatus = async (bookingId: string, newStatus: string) => {
+    try {
+      setIsLoading(true);
+      await bookingService.updateBookingStatus(bookingId, newStatus);
+      
+      // Update local state
+      setBookings(bookings.map(booking => 
+        booking.id === bookingId ? { ...booking, status: newStatus } : booking
+      ));
+      
+      toast.success(`Booking ${bookingId} status updated to ${newStatus}`);
+    } catch (error) {
+      console.error('Failed to update booking status:', error);
+      toast.error('Failed to update booking status. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const exportBookings = () => {
-    // TODO: BACKEND INTEGRATION - Export bookings data
-    console.log('Export bookings data');
-    alert('Export functionality - Backend integration needed');
+  const exportBookings = async () => {
+    try {
+      setIsLoading(true);
+      const response = await bookingService.exportBookings(user?.garageId || '');
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `bookings_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.success('Bookings exported successfully');
+    } catch (error) {
+      console.error('Failed to export bookings:', error);
+      toast.error('Failed to export bookings. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filterOptions = [
@@ -146,6 +126,14 @@ const ManageBookings: React.FC = () => {
     { value: 'completed', label: 'Completed', count: bookings.filter(b => b.status === 'completed').length },
     { value: 'cancelled', label: 'Cancelled', count: bookings.filter(b => b.status === 'cancelled').length }
   ];
+
+  if (isLoading && bookings.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-light py-8 px-4 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-light py-8 px-4">
@@ -158,7 +146,8 @@ const ManageBookings: React.FC = () => {
           </div>
           <button
             onClick={exportBookings}
-            className="bg-primary text-secondary px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors duration-200 flex items-center"
+            disabled={isLoading}
+            className="bg-primary text-secondary px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors duration-200 flex items-center disabled:opacity-50"
           >
             <Download className="h-4 w-4 mr-2" />
             Export
@@ -292,7 +281,8 @@ const ManageBookings: React.FC = () => {
                       {booking.status === 'pending' && (
                         <button
                           onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                          className="w-full bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors duration-200"
+                          disabled={isLoading}
+                          className="w-full bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors duration-200 disabled:opacity-50"
                         >
                           Confirm
                         </button>
@@ -300,7 +290,8 @@ const ManageBookings: React.FC = () => {
                       {booking.status === 'confirmed' && (
                         <button
                           onClick={() => updateBookingStatus(booking.id, 'in_progress')}
-                          className="w-full bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors duration-200"
+                          disabled={isLoading}
+                          className="w-full bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50"
                         >
                           Start Service
                         </button>
@@ -308,7 +299,8 @@ const ManageBookings: React.FC = () => {
                       {booking.status === 'in_progress' && (
                         <button
                           onClick={() => updateBookingStatus(booking.id, 'completed')}
-                          className="w-full bg-primary text-secondary px-3 py-1 rounded text-sm hover:bg-primary-dark transition-colors duration-200"
+                          disabled={isLoading}
+                          className="w-full bg-primary text-secondary px-3 py-1 rounded text-sm hover:bg-primary-dark transition-colors duration-200 disabled:opacity-50"
                         >
                           Complete
                         </button>
@@ -316,7 +308,8 @@ const ManageBookings: React.FC = () => {
                       {(booking.status === 'pending' || booking.status === 'confirmed') && (
                         <button
                           onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                          className="w-full bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors duration-200"
+                          disabled={isLoading}
+                          className="w-full bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors duration-200 disabled:opacity-50"
                         >
                           Cancel
                         </button>

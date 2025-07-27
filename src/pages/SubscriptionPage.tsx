@@ -1,11 +1,52 @@
-import React, { useState } from 'react';
-import { Check, Crown, Zap, Shield, Star, Users, Car, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, Crown, Zap, Shield, Star, Users, Car, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import subscriptionService from '../services/subscriptionService';
+import { useNavigate } from 'react-router-dom';
+
+interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  price: { monthly: number; yearly: number };
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  popular?: boolean;
+  features: string[];
+  limitations?: string[];
+  savings?: string | null;
+  trialDays?: number;
+}
 
 const SubscriptionPage: React.FC = () => {
+  const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
 
-  const plans = [
+  // Fetch current subscription on component mount
+  useEffect(() => {
+    const fetchCurrentSubscription = async () => {
+      if (user?.id) {
+        try {
+          const subscription = await subscriptionService.getCurrentSubscription();
+          setCurrentSubscription(subscription);
+        } catch (error) {
+          console.error('Failed to fetch subscription:', error);
+        }
+      }
+    };
+
+    fetchCurrentSubscription();
+  }, [user]);
+
+  const plans: Plan[] = [
     {
       id: 'basic',
       name: 'Basic',
@@ -26,7 +67,8 @@ const SubscriptionPage: React.FC = () => {
         'Limited to 5 bookings per month',
         'No priority support',
         'No emergency services'
-      ]
+      ],
+      trialDays: 7
     },
     {
       id: 'premium',
@@ -49,7 +91,8 @@ const SubscriptionPage: React.FC = () => {
         'Advanced service history',
         'Phone support'
       ],
-      savings: billingCycle === 'yearly' ? 'Save Rs. 2,000' : null
+      savings: billingCycle === 'yearly' ? 'Save Rs. 2,000' : null,
+      trialDays: 7
     },
     {
       id: 'pro',
@@ -71,11 +114,12 @@ const SubscriptionPage: React.FC = () => {
         '24/7 priority support',
         'Bulk booking discounts'
       ],
-      savings: billingCycle === 'yearly' ? 'Save Rs. 4,000' : null
+      savings: billingCycle === 'yearly' ? 'Save Rs. 4,000' : null,
+      trialDays: 14
     }
   ];
 
-  const garageFeatures = [
+  const garagePlans: Plan[] = [
     {
       id: 'garage-basic',
       name: 'Garage Basic',
@@ -92,7 +136,8 @@ const SubscriptionPage: React.FC = () => {
         'Service catalog management',
         'Payment processing',
         'Basic analytics'
-      ]
+      ],
+      trialDays: 7
     },
     {
       id: 'garage-pro',
@@ -115,17 +160,64 @@ const SubscriptionPage: React.FC = () => {
         'Multiple location support',
         'Emergency service dispatch'
       ],
-      savings: billingCycle === 'yearly' ? 'Save Rs. 12,000' : null
+      savings: billingCycle === 'yearly' ? 'Save Rs. 12,000' : null,
+      trialDays: 14
     }
   ];
 
-  const handlePlanSelect = (planId: string) => {
-    setSelectedPlan(planId);
+  const handleSubscribe = async (planId: string) => {
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      // Find the selected plan
+      const allPlans = [...plans, ...garagePlans];
+      const selectedPlan = allPlans.find(plan => plan.id === planId);
+      
+      if (!selectedPlan) {
+        throw new Error('Selected plan not found');
+      }
+
+      // Prepare subscription data
+      const subscriptionData = {
+        planId,
+        billingCycle,
+        price: selectedPlan.price[billingCycle],
+        trialDays: selectedPlan.trialDays
+      };
+
+      // Check if user already has a subscription
+      if (currentSubscription) {
+        // Handle subscription upgrade/downgrade
+        const response = await subscriptionService.changeSubscription(subscriptionData);
+        setSuccessMessage(response.message || 'Subscription updated successfully!');
+      } else {
+        // Handle new subscription
+        const response = await subscriptionService.createSubscription(subscriptionData);
+        setSuccessMessage(response.message || 'Subscription created successfully!');
+      }
+
+      // Refresh user data to get updated subscription status
+      await refreshUser();
+      
+      // Redirect to payment page or dashboard
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
+    } catch (error: any) {
+      console.error('Subscription error:', error);
+      setError(error.response?.data?.message || 
+              error.message || 
+              'Failed to process subscription. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSubscribe = (planId: string) => {
-    // Handle subscription logic here
-    console.log(`Subscribing to ${planId} plan with ${billingCycle} billing`);
+  const handleBillingCycleChange = (cycle: 'monthly' | 'yearly') => {
+    setBillingCycle(cycle);
+    setSelectedPlan('');
   };
 
   return (
@@ -141,26 +233,49 @@ const SubscriptionPage: React.FC = () => {
           </p>
         </div>
 
+        {/* Current Subscription Banner */}
+        {currentSubscription && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+            <div className="flex flex-col md:flex-row items-center justify-between">
+              <div className="flex items-center mb-2 md:mb-0">
+                <Shield className="h-5 w-5 text-blue-600 mr-2" />
+                <span className="font-semibold text-blue-800">
+                  Current Plan: {currentSubscription.planName} ({currentSubscription.billingCycle})
+                </span>
+              </div>
+              <div className="text-sm text-blue-700">
+                {currentSubscription.status === 'active' ? (
+                  `Renews on ${new Date(currentSubscription.nextBillingDate).toLocaleDateString()}`
+                ) : (
+                  `Expires on ${new Date(currentSubscription.endDate).toLocaleDateString()}`
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Billing Toggle */}
         <div className="flex justify-center mb-12">
           <div className="bg-white p-2 rounded-lg shadow-lg">
             <button
-              onClick={() => setBillingCycle('monthly')}
+              onClick={() => handleBillingCycleChange('monthly')}
+              disabled={isLoading}
               className={`px-6 py-2 rounded-md font-semibold transition-all duration-200 ${
                 billingCycle === 'monthly'
                   ? 'bg-primary text-secondary'
                   : 'text-gray-600 hover:text-secondary'
-              }`}
+              } disabled:opacity-50`}
             >
               Monthly
             </button>
             <button
-              onClick={() => setBillingCycle('yearly')}
+              onClick={() => handleBillingCycleChange('yearly')}
+              disabled={isLoading}
               className={`px-6 py-2 rounded-md font-semibold transition-all duration-200 ${
                 billingCycle === 'yearly'
                   ? 'bg-primary text-secondary'
                   : 'text-gray-600 hover:text-secondary'
-              }`}
+              } disabled:opacity-50`}
             >
               Yearly
               <span className="ml-2 text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">
@@ -169,6 +284,21 @@ const SubscriptionPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Error and Success Messages */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <span className="text-red-700 text-sm">{error}</span>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <span className="text-green-700 text-sm">{successMessage}</span>
+          </div>
+        )}
 
         {/* Customer Plans */}
         <div className="mb-16">
@@ -230,13 +360,23 @@ const SubscriptionPage: React.FC = () => {
 
                   <button
                     onClick={() => handleSubscribe(plan.id)}
-                    className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 ${
+                    disabled={isLoading || (currentSubscription && currentSubscription.planId === plan.id)}
+                    className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 ${
                       plan.popular
                         ? 'bg-primary text-secondary hover:bg-primary-dark'
                         : 'bg-secondary text-white hover:bg-gray-dark'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {plan.id === 'basic' ? 'Start Free Trial' : 'Get Started'}
+                    {isLoading && selectedPlan === plan.id ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Processing...
+                      </div>
+                    ) : currentSubscription?.planId === plan.id ? (
+                      'Current Plan'
+                    ) : (
+                      `${plan.id === 'basic' ? 'Start Free Trial' : 'Get Started'}`
+                    )}
                   </button>
                 </div>
               </div>
@@ -251,7 +391,7 @@ const SubscriptionPage: React.FC = () => {
             For Garage Owners
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-            {garageFeatures.map((plan) => (
+            {garagePlans.map((plan) => (
               <div
                 key={plan.id}
                 className={`bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 transform hover:-translate-y-1 ${
@@ -293,13 +433,23 @@ const SubscriptionPage: React.FC = () => {
 
                   <button
                     onClick={() => handleSubscribe(plan.id)}
-                    className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 ${
+                    disabled={isLoading || (currentSubscription && currentSubscription.planId === plan.id)}
+                    className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 ${
                       plan.popular
                         ? 'bg-primary text-secondary hover:bg-primary-dark'
                         : 'bg-secondary text-white hover:bg-gray-dark'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    Start Free Trial
+                    {isLoading && selectedPlan === plan.id ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Processing...
+                      </div>
+                    ) : currentSubscription?.planId === plan.id ? (
+                      'Current Plan'
+                    ) : (
+                      'Start Free Trial'
+                    )}
                   </button>
                 </div>
               </div>
@@ -355,7 +505,7 @@ const SubscriptionPage: React.FC = () => {
             </div>
             <div>
               <h4 className="font-bold text-secondary mb-2">Is there a free trial?</h4>
-              <p className="text-gray-600">Yes! All premium plans come with a 7-day free trial. No credit card required to start.</p>
+              <p className="text-gray-600">Yes! All premium plans come with a 7-14 day free trial. No credit card required to start.</p>
             </div>
             <div>
               <h4 className="font-bold text-secondary mb-2">Can I change my plan later?</h4>
