@@ -1,25 +1,26 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './hooks/useAuth';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import HomePage from './pages/HomePage';
-import BookingPage from './pages/BookingPage';
-import EmergencyPage from './pages/EmergencyPage';
-import DiagnosisPage from './pages/DiagnosisPage';
-import SubscriptionPage from './pages/SubscriptionPage';
-import AdminDashboard from './pages/AdminDashboard';
-import GarageDashboard from './pages/GarageDashboard';
-import ManageBookings from './pages/ManageBookings';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
-import GarageSearchPage from './pages/GarageSearchPage';
-import BatteryChargePage from './pages/BatteryChargePage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import Dashboard from './pages/Dashboard';
-import ProtectedRoute from './components/ProtectedRoute';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./hooks/useAuth";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import HomePage from "./pages/HomePage";
+import BookingPage from "./pages/BookingPage";
+import EmergencyPage from "./pages/EmergencyPage";
+import DiagnosisPage from "./pages/DiagnosisPage";
+import SubscriptionPage from "./pages/SubscriptionPage";
+import AdminDashboard from "./pages/AdminDashboard";
+import GarageDashboard from "./pages/GarageDashboard";
+import ManageBookings from "./pages/ManageBookings";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import ProfilePage from "./pages/ProfilePage";
+import GarageSearchPage from "./pages/GarageSearchPage";
+import BatteryChargePage from "./pages/BatteryChargePage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import Dashboard from "./pages/Dashboard";
+import LegalPage from "./pages/LegalPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -36,6 +37,8 @@ function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/garages" element={<GarageSearchPage />} />
               <Route path="/battery-charging" element={<BatteryChargePage />} />
+              <Route path="/terms" element={<LegalPage type="terms" />} />
+              <Route path="/privacy" element={<LegalPage type="privacy" />} />
               <Route
                 path="/dashboard"
                 element={
@@ -44,69 +47,69 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route 
-                path="/booking" 
+              <Route
+                path="/booking"
                 element={
                   <ProtectedRoute>
                     <BookingPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/emergency" 
+              <Route
+                path="/emergency"
                 element={
                   <ProtectedRoute>
                     <EmergencyPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/diagnosis" 
+              <Route
+                path="/diagnosis"
                 element={
                   <ProtectedRoute>
                     <DiagnosisPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/subscription" 
+              <Route
+                path="/subscription"
                 element={
                   <ProtectedRoute>
                     <SubscriptionPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/profile" 
+              <Route
+                path="/profile"
                 element={
                   <ProtectedRoute>
                     <ProfilePage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/admin" 
+              <Route
+                path="/admin"
                 element={
                   <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/garage-dashboard" 
+              <Route
+                path="/garage-dashboard"
                 element={
                   <ProtectedRoute requiredRole="garage_owner">
                     <GarageDashboard />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/manage-bookings" 
+              <Route
+                path="/manage-bookings"
                 element={
                   <ProtectedRoute requiredRole="garage_owner">
                     <ManageBookings />
                   </ProtectedRoute>
-                } 
+                }
               />
             </Routes>
           </main>
