@@ -1,66 +1,97 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Car, Mail, Lock, Eye, EyeOff, AlertCircle, User, Shield, Wrench } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { toast } from 'react-toastify';
+import React, { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  Car,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  User,
+  Shield,
+  Wrench,
+} from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
+import { toast } from "react-toastify";
 
 interface LoginFormData {
   email: string;
   password: string;
-  role: 'customer' | 'garage_owner' | 'admin';
+  role: "customer" | "garage_owner" | "admin";
 }
+
+const demoCredentials = [
+  {
+    role: "customer" as const,
+    label: "Customer demo",
+    email: "customer@test.com",
+    password: "password123",
+  },
+  {
+    role: "garage_owner" as const,
+    label: "Garage owner demo",
+    email: "garage@test.com",
+    password: "password123",
+  },
+  {
+    role: "admin" as const,
+    label: "Admin demo",
+    email: "admin@veloresq.com",
+    password: "password123",
+  },
+];
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginFormData>({
-    email: '',
-    password: '',
-    role: 'customer',
+    email: "",
+    password: "",
+    role: "customer",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   // Get the previous location or default to home
-  const from = location.state?.from?.pathname || '/';
+  const from = location.state?.from?.pathname || "/";
 
   const roleOptions = [
     {
-      value: 'customer',
-      label: 'Customer',
+      value: "customer",
+      label: "Customer",
       icon: User,
-      description: 'Book services and manage your vehicle',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200'
+      description: "Book services and manage your vehicle",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
     },
     {
-      value: 'garage_owner',
-      label: 'Garage Owner',
+      value: "garage_owner",
+      label: "Garage Owner",
       icon: Wrench,
-      description: 'Manage your garage and services',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200'
+      description: "Manage your garage and services",
+      color: "text-green-600",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200",
     },
     {
-      value: 'admin',
-      label: 'Administrator',
+      value: "admin",
+      label: "Administrator",
       icon: Shield,
-      description: 'System administration access',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200'
-    }
+      description: "System administration access",
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+      borderColor: "border-purple-200",
+    },
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
       // Call the login function from the auth context with proper parameters
@@ -71,23 +102,22 @@ const LoginPage: React.FC = () => {
 
       // Redirect based on role
       let redirectPath = from;
-      if (formData.role === 'admin') {
-        redirectPath = '/admin';
-      } else if (formData.role === 'garage_owner') {
-        redirectPath = '/garage-dashboard';
-      } else if (from === '/') {
+      if (formData.role === "admin") {
+        redirectPath = "/admin";
+      } else if (formData.role === "garage_owner") {
+        redirectPath = "/garage-dashboard";
+      } else if (from === "/") {
         // If coming from home, redirect to appropriate dashboard
-        redirectPath = '/dashboard';
+        redirectPath = "/dashboard";
       }
 
       // Navigate to the appropriate page
       navigate(redirectPath, { replace: true });
-
     } catch (error: any) {
-      console.error('Login error:', error);
-      
+      console.error("Login error:", error);
+
       // Handle different types of errors
-      let errorMessage = 'Login failed. Please try again.';
+      let errorMessage = "Login failed. Please try again.";
       if (error.message) {
         errorMessage = error.message;
       }
@@ -101,14 +131,23 @@ const LoginPage: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleRoleChange = (role: 'customer' | 'garage_owner' | 'admin') => {
-    setFormData(prev => ({ ...prev, role }));
+  const handleRoleChange = (role: "customer" | "garage_owner" | "admin") => {
+    setFormData((prev) => ({ ...prev, role }));
+  };
+
+  const fillDemoCredentials = (demo: (typeof demoCredentials)[number]) => {
+    setFormData({
+      role: demo.role,
+      email: demo.email,
+      password: demo.password,
+    });
+    setError("");
   };
 
   return (
@@ -145,7 +184,7 @@ const LoginPage: React.FC = () => {
                     className={`block p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
                       formData.role === role.value
                         ? `${role.borderColor} ${role.bgColor}`
-                        : 'border-gray-200 hover:border-gray-300'
+                        : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
                     <input
@@ -161,8 +200,12 @@ const LoginPage: React.FC = () => {
                         <role.icon className={`h-5 w-5 ${role.color}`} />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-secondary">{role.label}</h3>
-                        <p className="text-sm text-gray-600">{role.description}</p>
+                        <h3 className="font-semibold text-secondary">
+                          {role.label}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {role.description}
+                        </p>
                       </div>
                     </div>
                   </label>
@@ -171,7 +214,10 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-secondary mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-secondary mb-2"
+              >
                 Email Address
               </label>
               <div className="relative">
@@ -191,7 +237,10 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-secondary mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-secondary mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -199,7 +248,7 @@ const LoginPage: React.FC = () => {
                 <input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
                   value={formData.password}
@@ -211,9 +260,13 @@ const LoginPage: React.FC = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -226,14 +279,17 @@ const LoginPage: React.FC = () => {
                   type="checkbox"
                   className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                <label
+                  htmlFor="remember-me"
+                  className="ml-2 block text-sm text-gray-700"
+                >
                   Remember me
                 </label>
               </div>
 
               <div className="text-sm">
-                <Link 
-                  to="/forgot-password" 
+                <Link
+                  to="/forgot-password"
                   className="text-primary hover:text-primary-dark font-medium"
                 >
                   Forgot your password?
@@ -245,7 +301,9 @@ const LoginPage: React.FC = () => {
               type="submit"
               disabled={isLoading}
               className={`w-full bg-primary text-secondary py-3 px-4 rounded-lg font-semibold hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200 ${
-                isLoading ? 'opacity-50 cursor-not-allowed' : 'transform hover:scale-105'
+                isLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : "transform hover:scale-105"
               }`}
             >
               {isLoading ? (
@@ -254,16 +312,35 @@ const LoginPage: React.FC = () => {
                   Signing in...
                 </div>
               ) : (
-                'Sign In'
+                "Sign In"
               )}
             </button>
           </form>
 
+          <div className="mt-6 border-t border-gray-200 pt-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Demo accounts
+            </p>
+            <div className="mt-3 grid gap-2">
+              {demoCredentials.map((demo) => (
+                <button
+                  key={demo.email}
+                  type="button"
+                  onClick={() => fillDemoCredentials(demo)}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm text-secondary transition-colors hover:border-primary hover:bg-gray-50"
+                >
+                  <span>{demo.label}</span>
+                  <span className="text-xs text-gray-500">Use credentials</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              Don't have an account?{' '}
-              <Link 
-                to="/register" 
+              Don't have an account?{" "}
+              <Link
+                to="/register"
                 className="text-primary hover:text-primary-dark font-semibold"
               >
                 Sign up here
@@ -274,9 +351,12 @@ const LoginPage: React.FC = () => {
           {/* Role-specific help text */}
           <div className="mt-4 p-3 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-600 text-center">
-              {formData.role === 'admin' && "Admin access requires special permissions. Contact support if you need admin access."}
-              {formData.role === 'garage_owner' && "Garage owners can manage their service centers and bookings."}
-              {formData.role === 'customer' && "Customers can book services, get AI diagnostics, and request emergency help."}
+              {formData.role === "admin" &&
+                "Admin access requires special permissions. Contact support if you need admin access."}
+              {formData.role === "garage_owner" &&
+                "Garage owners can manage their service centers and bookings."}
+              {formData.role === "customer" &&
+                "Customers can book services, get AI diagnostics, and request emergency help."}
             </p>
           </div>
         </div>

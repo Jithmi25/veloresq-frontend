@@ -1,72 +1,162 @@
-import { apiService } from './api';
-import { User, LoginRequest, RegisterRequest, Facility, CreateFacilityRequest } from '../types';
+import { apiService } from "./api";
+import {
+  User,
+  LoginRequest,
+  RegisterRequest,
+  Facility,
+  CreateFacilityRequest,
+} from "../types";
+
+const demoUsers: Array<{ email: string; password: string; user: User }> = [
+  {
+    email: "admin@veloresq.com",
+    password: "password123",
+    user: {
+      id: "demo-admin",
+      email: "admin@veloresq.com",
+      firstName: "Demo",
+      lastName: "Administrator",
+      phoneNumber: "+10000000000",
+      role: "admin",
+      isVerified: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  },
+  {
+    email: "customer@test.com",
+    password: "password123",
+    user: {
+      id: "demo-customer",
+      email: "customer@test.com",
+      firstName: "Demo",
+      lastName: "Customer",
+      phoneNumber: "+10000000001",
+      role: "customer",
+      isVerified: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  },
+  {
+    email: "garage@test.com",
+    password: "password123",
+    user: {
+      id: "demo-garage-owner",
+      email: "garage@test.com",
+      firstName: "Demo",
+      lastName: "Garage Owner",
+      phoneNumber: "+10000000002",
+      role: "garage_owner",
+      isVerified: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      garageName: "Veloresq Demo Garage",
+      garageAddress: "100 Demo Street",
+    },
+  },
+];
+
+const findDemoUser = (email: string, password: string) =>
+  demoUsers.find(
+    (demoUser) => demoUser.email === email && demoUser.password === password,
+  );
 
 export class AuthService {
-  async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
+  async login(
+    credentials: LoginRequest,
+  ): Promise<{ user: User; token: string }> {
+    const demoUser = findDemoUser(
+      credentials.email.trim().toLowerCase(),
+      credentials.password,
+    );
+    if (demoUser) {
+      const result = {
+        user: demoUser.user,
+        token: `demo-token-${demoUser.user.id}`,
+      };
+      localStorage.setItem("authToken", result.token);
+      localStorage.setItem("user", JSON.stringify(result.user));
+      return result;
+    }
+
     try {
-      const response = await apiService.post<{ user: User; token: string }>('/auth/login', {
-        email: credentials.email,
-        password: credentials.password,
-        role: credentials.role
-      });
-      
+      const response = await apiService.post<{ user: User; token: string }>(
+        "/auth/login",
+        {
+          email: credentials.email,
+          password: credentials.password,
+          role: credentials.role,
+        },
+      );
+
       if (response.success && response.data) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem("authToken", response.data.token);
+        localStorage.setItem("user", JSON.stringify(response.data.user));
         return response.data;
       }
-      
-      throw new Error(response.message || 'Login failed');
+
+      throw new Error(response.message || "Login failed");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Login failed');
+      throw new Error(error.message || "Login failed");
     }
   }
 
-  async register(userData: RegisterRequest): Promise<{ user: User; token: string }> {
+  async register(
+    userData: RegisterRequest,
+  ): Promise<{ user: User; token: string }> {
     try {
-      const response = await apiService.post<{ user: User; token: string }>('/auth/register', userData);
-      
+      const response = await apiService.post<{ user: User; token: string }>(
+        "/auth/register",
+        userData,
+      );
+
       if (response.success && response.data) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem("authToken", response.data.token);
+        localStorage.setItem("user", JSON.stringify(response.data.user));
         return response.data;
       }
-      
-      throw new Error(response.message || 'Registration failed');
+
+      throw new Error(response.message || "Registration failed");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Registration failed');
+      throw new Error(error.message || "Registration failed");
     }
   }
 
   async logout(): Promise<void> {
     try {
-      await apiService.post('/auth/logout');
+      await apiService.post("/auth/logout");
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     } finally {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("user");
     }
   }
 
   async getCurrentUser(): Promise<User | null> {
+    const storedUser = this.getStoredUser();
+    if (this.getStoredToken()?.startsWith("demo-token-")) {
+      return storedUser;
+    }
+
     try {
-      const response = await apiService.get<{ user: User }>('/auth/me');
-      
+      const response = await apiService.get<{ user: User }>("/auth/me");
+
       if (response.success && response.data) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem("user", JSON.stringify(response.data.user));
         return response.data.user;
       }
-      
+
       return null;
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error("Get current user error:", error);
       this.logout();
       return null;
     }
@@ -74,91 +164,99 @@ export class AuthService {
 
   async forgotPassword(email: string): Promise<void> {
     try {
-      const response = await apiService.post('/auth/forgot-password', { email });
-      
+      const response = await apiService.post("/auth/forgot-password", {
+        email,
+      });
+
       if (!response.success) {
-        throw new Error(response.message || 'Failed to send reset email');
+        throw new Error(response.message || "Failed to send reset email");
       }
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to send reset email');
+      throw new Error(error.message || "Failed to send reset email");
     }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
     try {
-      const response = await apiService.post('/auth/reset-password', { 
-        token, 
-        password: newPassword 
+      const response = await apiService.post("/auth/reset-password", {
+        token,
+        password: newPassword,
       });
-      
+
       if (!response.success) {
-        throw new Error(response.message || 'Failed to reset password');
+        throw new Error(response.message || "Failed to reset password");
       }
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to reset password');
+      throw new Error(error.message || "Failed to reset password");
     }
   }
 
   async verifyEmail(token: string): Promise<void> {
     try {
-      const response = await apiService.post('/auth/verify-email', { token });
-      
+      const response = await apiService.post("/auth/verify-email", { token });
+
       if (!response.success) {
-        throw new Error(response.message || 'Email verification failed');
+        throw new Error(response.message || "Email verification failed");
       }
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Email verification failed');
+      throw new Error(error.message || "Email verification failed");
     }
   }
 
   async updateProfile(profileData: Partial<User>): Promise<User> {
     try {
-      const response = await apiService.put<{ user: User }>('/users/profile', profileData);
-      
+      const response = await apiService.put<{ user: User }>(
+        "/users/profile",
+        profileData,
+      );
+
       if (response.success && response.data) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem("user", JSON.stringify(response.data.user));
         return response.data.user;
       }
-      
-      throw new Error(response.message || 'Failed to update profile');
+
+      throw new Error(response.message || "Failed to update profile");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to update profile');
+      throw new Error(error.message || "Failed to update profile");
     }
   }
 
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
     try {
-      const response = await apiService.put('/users/change-password', {
+      const response = await apiService.put("/users/change-password", {
         currentPassword,
-        newPassword
+        newPassword,
       });
-      
+
       if (!response.success) {
-        throw new Error(response.message || 'Failed to change password');
+        throw new Error(response.message || "Failed to change password");
       }
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to change password');
+      throw new Error(error.message || "Failed to change password");
     }
   }
 
   getStoredUser(): User | null {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = localStorage.getItem("user");
       return userStr ? JSON.parse(userStr) : null;
     } catch {
       return null;
@@ -166,7 +264,7 @@ export class AuthService {
   }
 
   getStoredToken(): string | null {
-    return localStorage.getItem('authToken');
+    return localStorage.getItem("authToken");
   }
 
   isAuthenticated(): boolean {
@@ -177,67 +275,77 @@ export class AuthService {
 export class FacilityService {
   async getGarageFacilities(): Promise<{ facilities: Facility[] }> {
     try {
-      const response = await apiService.get<{ facilities: Facility[] }>('/facilities');
-      
+      const response = await apiService.get<{ facilities: Facility[] }>(
+        "/facilities",
+      );
+
       if (response.success && response.data) {
         return response.data;
       }
-      
-      throw new Error(response.message || 'Failed to get facilities');
+
+      throw new Error(response.message || "Failed to get facilities");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to get facilities');
+      throw new Error(error.message || "Failed to get facilities");
     }
   }
 
-  async addFacility(facilityData: CreateFacilityRequest): Promise<{ facility: Facility }> {
+  async addFacility(
+    facilityData: CreateFacilityRequest,
+  ): Promise<{ facility: Facility }> {
     try {
-      const response = await apiService.post<{ facility: Facility }>('/facilities', facilityData);
-      
+      const response = await apiService.post<{ facility: Facility }>(
+        "/facilities",
+        facilityData,
+      );
+
       if (response.success && response.data) {
         return response.data;
       }
-      
-      throw new Error(response.message || 'Failed to add facility');
+
+      throw new Error(response.message || "Failed to add facility");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to add facility');
+      throw new Error(error.message || "Failed to add facility");
     }
   }
 
   async deleteFacility(id: string): Promise<void> {
     try {
       const response = await apiService.delete(`/facilities/${id}`);
-      
+
       if (!response.success) {
-        throw new Error(response.message || 'Failed to delete facility');
+        throw new Error(response.message || "Failed to delete facility");
       }
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to delete facility');
+      throw new Error(error.message || "Failed to delete facility");
     }
   }
 
   async updateFacilityStatus(id: string, isActive: boolean): Promise<Facility> {
     try {
-      const response = await apiService.put<{ facility: Facility }>(`/facilities/${id}`, { isActive });
-      
+      const response = await apiService.put<{ facility: Facility }>(
+        `/facilities/${id}`,
+        { isActive },
+      );
+
       if (response.success && response.data) {
         return response.data.facility;
       }
-      
-      throw new Error(response.message || 'Failed to update facility status');
+
+      throw new Error(response.message || "Failed to update facility status");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to update facility status');
+      throw new Error(error.message || "Failed to update facility status");
     }
   }
 }
@@ -245,19 +353,22 @@ export class FacilityService {
 export class UserService {
   async updateUserProfile(profileData: Partial<User>): Promise<User> {
     try {
-      const response = await apiService.put<{ user: User }>('/users/profile', profileData);
-      
+      const response = await apiService.put<{ user: User }>(
+        "/users/profile",
+        profileData,
+      );
+
       if (response.success && response.data) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem("user", JSON.stringify(response.data.user));
         return response.data.user;
       }
-      
-      throw new Error(response.message || 'Failed to update profile');
+
+      throw new Error(response.message || "Failed to update profile");
     } catch (error: any) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      throw new Error(error.message || 'Failed to update profile');
+      throw new Error(error.message || "Failed to update profile");
     }
   }
 }
